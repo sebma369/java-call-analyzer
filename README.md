@@ -6,19 +6,25 @@
 
 ```
 TestGen/
-├── analyzer.py              # 调用链分析逻辑
-├── cli.py                   # 命令行接口
-├── parser.py                # Java 代码解析
-├── utils.py                 # 工具函数
-├── run.py                   # 运行脚本
-├── __init__.py              # 包初始化
-├── __main__.py              # 模块入口
-├── environment.yml          # Conda 环境配置
+├── java_call_analyzer/      # 主包目录
+│   ├── __init__.py          # 包初始化
+│   ├── __main__.py          # 模块入口
+│   ├── analyzer.py          # 调用链分析逻辑
+│   ├── cli.py               # 命令行接口
+│   ├── parser.py            # Java 代码解析
+│   └── utils.py             # 工具函数
+├── scripts/                 # 脚本目录
+│   └── run.py               # 运行脚本
 ├── tests/                   # 测试文件
+│   ├── __init__.py
 │   ├── test_analyzer.py
 │   └── test_data/
+│       ├── A.java
+│       └── B.java
+├── environment.yml          # Conda 环境配置
 ├── .gitignore               # Git 忽略文件
-└── README.md
+├── README.md                # 项目文档
+└── .git/                    # Git 仓库
 ```
 
 ## 快速开始
@@ -33,14 +39,14 @@ conda activate testgen
 ### 2. 运行分析
 
 ```bash
-# 使用运行脚本
-python run.py /path/to/repo /path/to/target/File.java
+# 使用运行脚本（推荐）
+python scripts/run.py /path/to/repo /path/to/target/File.java
 
-# 或者直接运行模块
-python -m cli /path/to/repo /path/to/target/File.java
+# 或者作为模块运行
+python -m java_call_analyzer.cli /path/to/repo /path/to/target/File.java
 
 # 示例
-python run.py tests/test_data tests/test_data/B.java
+python scripts/run.py tests/test_data tests/test_data/B.java
 ```
 
 ## 输出
@@ -62,15 +68,15 @@ python -m pytest tests/
 
 ```bash
 pip install black isort
-black .
-isort .
+black java_call_analyzer/ tests/ scripts/
+isort java_call_analyzer/ tests/ scripts/
 ```
 
 ### 代码检查
 
 ```bash
 pip install flake8
-flake8 .
+flake8 java_call_analyzer/ tests/ scripts/
 ```
 
 ```python

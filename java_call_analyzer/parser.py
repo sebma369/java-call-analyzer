@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import javalang
 
-from utils import find_java_files, get_package, full_class_name
+from .utils import find_java_files, get_package, full_class_name
 
 
 def collect_methods_and_calls(repo_root):

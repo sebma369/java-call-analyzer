@@ -4,8 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from parser import collect_methods_and_calls, collect_target_methods
-from analyzer import build_call_chains
+from java_call_analyzer.parser import collect_methods_and_calls, collect_target_methods
+from java_call_analyzer.analyzer import build_call_chains
 
 
 def test_collect_target_methods():
