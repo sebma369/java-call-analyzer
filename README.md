@@ -1,31 +1,38 @@
-# Java Call Analyzer
+# Java Static Analyzer
 
-一个用于静态分析 Java 方法调用链的工具。
+一个用于静态分析 Java 代码的工具，支持方法调用链分析和执行路径分析。
 
 ## 项目结构
 
 ```
 TestGen/
-├── java_call_analyzer/      # 主包目录
-│   ├── __init__.py          # 包初始化
-│   ├── __main__.py          # 模块入口
-│   ├── analyzer.py          # 调用链分析逻辑
-│   ├── cli.py               # 命令行接口
-│   ├── parser.py            # Java 代码解析
-│   └── utils.py             # 工具函数
-├── scripts/                 # 脚本目录
-│   └── run.py               # 运行脚本
-├── tests/                   # 测试文件
-│   ├── __init__.py
+├── java_call_analyzer/           # 主包目录
+│   ├── __init__.py               # 包初始化
+│   ├── analyzer.py               # 调用链分析逻辑
+│   ├── cli.py                    # 命令行接口
+│   ├── execution_path_analyzer.py # 执行路径分析逻辑
+│   ├── parser.py                 # Java 代码解析
+│   └── utils.py                  # 工具函数
+├── scripts/                      # 脚本目录
+│   └── run.py                    # 运行脚本
+├── tests/                        # 测试文件
 │   ├── test_analyzer.py
 │   └── test_data/
-│       ├── A.java
-│       └── B.java
-├── environment.yml          # Conda 环境配置
-├── .gitignore               # Git 忽略文件
-├── README.md                # 项目文档
-└── .git/                    # Git 仓库
+├── environment.yml               # Conda 环境配置
+└── README.md                     # 项目文档
 ```
+
+## 功能特性
+
+### 1. 方法调用链分析 (call-chain)
+- 分析方法间的调用关系
+- 支持向上调用链（谁调用了我）和向下调用链（我调用了谁）
+- 可配置最大分析深度
+
+### 2. 执行路径分析 (execution-path)
+- 分析方法内部的所有执行路径
+- 通过控制流图 (CFG) 识别分支、循环等结构
+- 输出每个方法的所有可能执行路径
 
 ## 快速开始
 
@@ -38,15 +45,28 @@ conda activate testgen
 
 ### 2. 运行分析
 
+#### 方法调用链分析
 ```bash
-# 使用运行脚本（推荐）
-python scripts/run.py /path/to/repo /path/to/target/File.java
-
-# 或者作为模块运行
-python -m java_call_analyzer.cli /path/to/repo /path/to/target/File.java
+# 需要指定仓库目录和目标文件
+python -m java_call_analyzer.cli --mode call-chain --repo /path/to/repo /path/to/target/File.java
 
 # 示例
-python scripts/run.py tests/test_data tests/test_data/B.java
+python -m java_call_analyzer.cli --mode call-chain --repo tests/test_data tests/test_data/B.java
+```
+
+#### 执行路径分析
+```bash
+# 只需要指定目标文件
+python -m java_call_analyzer.cli --mode execution-path /path/to/target/File.java
+
+# 示例
+python -m java_call_analyzer.cli --mode execution-path tests/test_data/ExecutionPathTest.java
+```
+
+### 3. 运行测试
+
+```bash
+python -m pytest tests/ -v
 ```
 
 ## 输出

@@ -60,3 +60,33 @@ def test_build_call_chains():
     methods = [m for m, c in down_chains]
     assert all(m == "testdata.B.bar(0)" for m in methods)
     # Should have multiple paths
+
+
+def test_analyze_execution_paths():
+    """Test analyzing execution paths in a Java class."""
+    from java_call_analyzer.execution_path_analyzer import analyze_execution_paths
+
+    test_file = Path(__file__).parent / "test_data" / "ExecutionPathTest.java"
+    results = analyze_execution_paths(str(test_file))
+
+    # Check that we have results for all methods
+    expected_methods = [
+        "testdata.ExecutionPathTest.simpleMethod(1)",
+        "testdata.ExecutionPathTest.loopMethod(1)",
+        "testdata.ExecutionPathTest.switchMethod(1)"
+    ]
+
+    for method in expected_methods:
+        assert method in results
+        assert isinstance(results[method], list)
+        # Each method should have at least one path
+        assert len(results[method]) > 0
+
+    # Check simpleMethod has two paths (if and else)
+    simple_paths = results["testdata.ExecutionPathTest.simpleMethod(1)"]
+    assert len(simple_paths) >= 2  # At least if and else paths
+
+    # Check that paths contain expected elements
+    for path in simple_paths:
+        assert "entry" in path[0]
+        assert any("return" in step for step in path)
