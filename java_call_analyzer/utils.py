@@ -1,10 +1,10 @@
-"""Utility functions for Java call analyzer."""
+#工具函数，用于 Java 文件处理和 AST 分析。
 
 import os
 
 
 def find_java_files(root):
-    """Find all Java files in the given directory recursively."""
+    # 找到给定目录下的所有 Java 文件，递归搜索。
     for dirpath, _, filenames in os.walk(root):
         for fn in filenames:
             if fn.endswith('.java'):
@@ -12,12 +12,12 @@ def find_java_files(root):
 
 
 def get_package(tree):
-    """Extract package name from Java AST tree."""
+    #从 Java AST 树中提取包名。
     return tree.package.name if tree.package else None
 
 
 def type_name(node):
-    """Get type name from AST node."""
+    #从 AST 节点获取类型名称。
     if node is None:
         return None
     if hasattr(node, 'name'):
@@ -26,7 +26,7 @@ def type_name(node):
 
 
 def full_class_name(package_name, class_stack, class_decl):
-    """Build full class name including package and nested classes."""
+    #构建完整的类名，包括包名和嵌套类。
     class_name = class_decl.name
     if class_stack:
         class_name = '.'.join(class_stack + [class_name])

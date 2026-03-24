@@ -11,11 +11,11 @@ from .execution_path_analyzer import analyze_execution_paths
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(description='Java 静态分析工具')
-    parser.add_argument('target', type=str, help='目标 Java 文件路径（绝对或相对）')
+    parser.add_argument('target', type=str, help='目标 Java 文件路径(绝对或相对)')
     parser.add_argument('--mode', choices=['call-chain', 'execution-path'], default='call-chain',
-                       help='分析模式：call-chain（调用链）或 execution-path（执行路径）')
-    parser.add_argument('--repo', type=str, help='Java 代码仓库根目录（仅call-chain模式需要）')
-    parser.add_argument('--depth', type=int, default=10, help='最大深度（仅call-chain模式）')
+                       help='分析模式:call-chain(调用链)或 execution-path(执行路径)')
+    parser.add_argument('--repo', type=str, help='Java 代码仓库根目录(call-chain)')
+    parser.add_argument('--depth', type=int, default=10, help='最大深度(call-chain)')
     args = parser.parse_args()
 
     target_file = os.path.abspath(args.target)

@@ -1,4 +1,4 @@
-"""Execution path analyzer for Java methods."""
+# 路径分析器 - 构建方法的控制流图并提取执行路径
 
 import sys
 from collections import defaultdict
@@ -10,7 +10,7 @@ from .utils import get_package, full_class_name
 
 
 class CFGBuilder:
-    """Builds Control Flow Graph for a Java method."""
+    # 为Java方法构建控制流图
 
     def __init__(self):
         self.graph = nx.DiGraph()
@@ -19,31 +19,31 @@ class CFGBuilder:
         self.exit_nodes = []
 
     def add_node(self, label):
-        """Add a node to the graph and return its ID."""
+        # 向图中添加一个节点并返回其 ID
         node_id = self.node_counter
         self.node_counter += 1
         self.graph.add_node(node_id, label=label)
         return node_id
 
     def build_cfg(self, method_body):
-        """Build CFG from method body."""
+        # 从方法体构建控制流图
         self.entry_node = self.add_node("entry")
         current = self.entry_node
         if method_body:
             if isinstance(method_body, list):
-                # method_body is a list of statements
+                # method_body 是一个语句列表
                 for stmt in method_body:
                     result = self.process_statement(stmt, current)
                     if result is not None:
                         current = result
                     if current in self.exit_nodes:
-                        # If we hit an exit, stop processing
+                        # 如果我们遇到退出，停止处理
                         break
             else:
-                # method_body is a BlockStatement
+                # method_body 是一个单独的块
                 current = self.process_block(method_body, current)
         
-        # Add exit only if we didn't end with a return/break/etc.
+        # 只有在我们没有以 return/break 等结束时才添加 exit。
         if current not in self.exit_nodes and current is not None:
             exit_node = self.add_node("exit")
             self.graph.add_edge(current, exit_node)
@@ -51,7 +51,7 @@ class CFGBuilder:
         return self.graph
 
     def process_block(self, block, incoming):
-        """Process a block of statements."""
+        # 处理一块语句(方法体、if/else 块、循环块等)
         current = incoming
         if isinstance(block, list):
             statements = block
@@ -63,12 +63,12 @@ class CFGBuilder:
         for stmt in statements:
             current = self.process_statement(stmt, current)
             if current in self.exit_nodes:
-                # If we hit an exit, stop processing this block
+                # 如果我们遇到退出，停止处理当前块
                 return current
         return current
 
     def process_statement(self, stmt, incoming):
-        """Process a single statement."""
+        #处理单个语句，根据类型构建相应的控制流结构
         if isinstance(stmt, javalang.tree.IfStatement):
             result = self.process_if_statement(stmt, incoming)
             return result if result is not None else incoming
@@ -85,13 +85,13 @@ class CFGBuilder:
         elif isinstance(stmt, javalang.tree.SwitchStatement):
             return self.process_switch_statement(stmt, incoming)
         else:
-            # Generic statement (assignment, method call, etc.)
+            # 对于其他类型的语句，简单地添加一个节点并连接
             stmt_node = self.add_node(str(stmt))
             self.graph.add_edge(incoming, stmt_node)
             return stmt_node
 
     def process_if_statement(self, stmt, incoming):
-        """Process if-else statement."""
+        # 处理 if 语句，创建条件节点和分支结构
         cond_node = self.add_node(f"if {stmt.condition}")
         self.graph.add_edge(incoming, cond_node)
 
@@ -101,30 +101,30 @@ class CFGBuilder:
         if stmt.else_statement:
             # Else block
             else_end = self.process_block(stmt.else_statement, cond_node)
-            # Only create merge if neither branch returns
+            # 如果 then 和 else 都没有退出点，继续合并
             if then_end not in self.exit_nodes and else_end not in self.exit_nodes:
-                # Merge point
+                # 合并 then 和 else 的后续路径
                 merge_node = self.add_node("merge")
                 self.graph.add_edge(then_end, merge_node)
                 self.graph.add_edge(else_end, merge_node)
                 return merge_node
             else:
-                # At least one branch returns, this if statement is an exit point
+                # 如果其中一个分支有退出点，这个 if 语句也是一个退出点
                 if_exit = self.add_node("if_exit")
                 self.exit_nodes.append(if_exit)
                 return if_exit
         else:
-            # No else, continue after then if it doesn't return
+            # 没有 else 分支，如果 then 分支没有退出点，继续；否则这个 if 语句是一个退出点
             if then_end not in self.exit_nodes:
                 return then_end
             else:
-                # Then branch returns, this if statement is an exit point
+                # then 分支有退出点，这个 if 语句也是一个退出点
                 if_exit = self.add_node("if_exit")
                 self.exit_nodes.append(if_exit)
                 return if_exit
 
     def process_loop_statement(self, stmt, incoming):
-        """Process while or for loop."""
+        # 处理循环语句，创建条件节点和循环结构
         loop_type = "while" if isinstance(stmt, javalang.tree.WhileStatement) else "for"
         cond_expr = stmt.condition if hasattr(stmt, 'condition') else str(stmt.control)
         cond_node = self.add_node(f"{loop_type} {cond_expr}")
@@ -132,36 +132,36 @@ class CFGBuilder:
 
         # Loop body
         body_end = self.process_block(stmt.body, cond_node)
-        self.graph.add_edge(body_end, cond_node)  # Back edge
-
+        self.graph.add_edge(body_end, cond_node) 
+        
         # Exit from loop
         after_node = self.add_node(f"after_{loop_type}")
-        self.graph.add_edge(cond_node, after_node)  # False branch
+        self.graph.add_edge(cond_node, after_node) 
         return after_node
 
     def process_return_statement(self, stmt, incoming):
-        """Process return statement."""
+        # 处理 return 语句，创建一个退出节点
         ret_node = self.add_node(f"return {stmt.expression if stmt.expression else ''}")
         self.graph.add_edge(incoming, ret_node)
         self.exit_nodes.append(ret_node)
-        return ret_node  # No further connection
+        return ret_node  # 返回节点也是一个退出点
 
     def process_break_statement(self, stmt, incoming):
-        """Process break statement."""
+        # 处理 break 语句，创建一个退出节点
         break_node = self.add_node("break")
         self.graph.add_edge(incoming, break_node)
         self.exit_nodes.append(break_node)
         return break_node
 
     def process_continue_statement(self, stmt, incoming):
-        """Process continue statement."""
+        # 处理 continue 语句，创建一个节点并连接，但不一定是退出点
         continue_node = self.add_node("continue")
         self.graph.add_edge(incoming, continue_node)
-        # Note: In full implementation, this should connect back to loop condition
+        # continue 语句不一定是退出点，因为它可能跳回循环条件，但我们不需要在这里特别处理它
         return continue_node
 
     def process_try_statement(self, stmt, incoming):
-        """Process try-catch-finally."""
+        # 处理 try-catch-finally 语句，创建相应的控制流结构
         try_node = self.add_node("try")
         self.graph.add_edge(incoming, try_node)
         try_end = self.process_block(stmt.block, try_node)
@@ -171,7 +171,7 @@ class CFGBuilder:
         # Catch blocks
         for catch in stmt.catches:
             catch_node = self.add_node(f"catch {catch.parameter}")
-            self.graph.add_edge(try_node, catch_node)  # Exception edge
+            self.graph.add_edge(try_node, catch_node)  # 异常从 try 到 catch
             catch_end = self.process_block(catch.block, catch_node)
             merge_nodes.append(catch_end)
 
@@ -183,7 +183,7 @@ class CFGBuilder:
             finally_end = self.process_block(stmt.finally_block, finally_node)
             return finally_end
 
-        # Merge catches
+        # 如果没有 finally，合并 try 和 catch 的后续路径
         if len(merge_nodes) > 1:
             merge_node = self.add_node("merge_catches")
             for node in merge_nodes:
@@ -192,7 +192,7 @@ class CFGBuilder:
         return try_end
 
     def process_switch_statement(self, stmt, incoming):
-        """Process switch statement."""
+        # 处理 switch 语句，创建条件节点和 case 分支结构
         switch_node = self.add_node(f"switch {stmt.expression}")
         self.graph.add_edge(incoming, switch_node)
 
@@ -204,7 +204,7 @@ class CFGBuilder:
             case_end = self.process_block(case, case_node)
             merge_nodes.append(case_end)
 
-        # Merge all cases
+        # 合并所有 case 的后续路径
         if merge_nodes:
             merge_node = self.add_node("merge_switch")
             for node in merge_nodes:
@@ -214,7 +214,7 @@ class CFGBuilder:
 
 
 def analyze_execution_paths(java_file_path):
-    """Analyze all execution paths for methods in a Java class file."""
+    # 分析 Java 文件中每个方法的执行路径，返回一个字典，键是方法标识符，值是执行路径列表
     with open(java_file_path, 'r', encoding='utf-8', errors='ignore') as f:
         text = f.read()
 
@@ -239,7 +239,7 @@ def analyze_execution_paths(java_file_path):
             builder = CFGBuilder()
             cfg = builder.build_cfg(method.body)
 
-            # Enumerate all paths from entry to exits
+            # 从 entry 到 exit 的所有简单路径
             paths = []
             for exit_node in builder.exit_nodes:
                 try:

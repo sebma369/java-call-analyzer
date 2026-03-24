@@ -10,7 +10,7 @@ from .utils import find_java_files, get_package, full_class_name
 
 def collect_methods_and_calls(repo_root):
     """Parse all Java files and collect method definitions and call relationships."""
-    method_defs = {}  # key: full method id, value dict(attrs)
+    method_defs = {} # method key 到属性的映射
     methods_by_name = defaultdict(set)
     callers = defaultdict(set)  # callee -> set(caller)
     callees = defaultdict(set)  # caller -> set(callee)
@@ -21,7 +21,7 @@ def collect_methods_and_calls(repo_root):
         try:
             tree = javalang.parse.parse(text)
         except Exception as ex:
-            # skip parse errors
+            # 跳过解析错误
             print(f'WARN: 无法解析 Java 文件 {java_file}: {ex}', file=sys.stderr)
             continue
 
@@ -33,7 +33,7 @@ def collect_methods_and_calls(repo_root):
         for path, node in tree.filter(javalang.tree.TypeDeclaration):
             if not isinstance(node, (javalang.tree.ClassDeclaration, javalang.tree.InterfaceDeclaration, javalang.tree.EnumDeclaration)):
                 continue
-            # Build nested class path by walking ancestors
+            # 通过遍历祖先节点构建嵌套类路径
             ancestors = [n for n in path if isinstance(n, javalang.tree.TypeDeclaration)]
             class_stack = [n.name for n in ancestors[:-1] if n is not node]
             cls_name = full_class_name(package_name, class_stack, node)
