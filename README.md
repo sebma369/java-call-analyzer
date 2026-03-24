@@ -6,48 +6,72 @@
 
 ```
 TestGen/
-├── src/
-│   └── java_call_analyzer/
-│       ├── __init__.py
-│       ├── utils.py          # 工具函数
-│       ├── parser.py         # Java 代码解析
-│       ├── analyzer.py       # 调用链分析
-│       └── cli.py            # 命令行接口
-├── tests/
-│   ├── __init__.py
-│   ├── test_data/
-│   │   ├── A.java
-│   │   └── B.java
-│   └── test_analyzer.py
-├── pyproject.toml            # 项目配置
-├── environment.yml           # Conda 环境
+├── analyzer.py              # 调用链分析逻辑
+├── cli.py                   # 命令行接口
+├── parser.py                # Java 代码解析
+├── utils.py                 # 工具函数
+├── run.py                   # 运行脚本
+├── __init__.py              # 包初始化
+├── __main__.py              # 模块入口
+├── environment.yml          # Conda 环境配置
+├── tests/                   # 测试文件
+│   ├── test_analyzer.py
+│   └── test_data/
+├── .gitignore               # Git 忽略文件
 └── README.md
 ```
 
-## 安装
+## 快速开始
 
-### 使用 Conda 环境
+### 1. 创建环境
 
 ```bash
 conda env create -f environment.yml
 conda activate testgen
 ```
 
-### 安装包
+### 2. 运行分析
 
 ```bash
-pip install -e .
+# 使用运行脚本
+python run.py /path/to/repo /path/to/target/File.java
+
+# 或者直接运行模块
+python -m cli /path/to/repo /path/to/target/File.java
+
+# 示例
+python run.py tests/test_data tests/test_data/B.java
 ```
 
-## 使用
+## 输出
 
-### 命令行
+工具为目标文件中的每个方法输出：
+
+- ↑ 向上调用链（谁调用了我）
+- ↓ 向下调用链（我调用了谁）
+
+## 运行测试
 
 ```bash
-java-call-analyzer /path/to/repo /path/to/target/File.java
+python -m pytest tests/
 ```
 
-### Python API
+## 开发
+
+### 代码格式化
+
+```bash
+pip install black isort
+black .
+isort .
+```
+
+### 代码检查
+
+```bash
+pip install flake8
+flake8 .
+```
 
 ```python
 from java_call_analyzer.parser import collect_methods_and_calls, collect_target_methods

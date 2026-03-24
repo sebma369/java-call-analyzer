@@ -3,8 +3,8 @@
 import argparse
 import os
 
-from .parser import collect_methods_and_calls, collect_target_methods
-from .analyzer import build_call_chains
+from parser import collect_methods_and_calls, collect_target_methods
+from analyzer import build_call_chains
 
 
 def main():
