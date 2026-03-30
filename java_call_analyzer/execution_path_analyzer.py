@@ -1,4 +1,7 @@
 # 路径分析器 - 构建方法的控制流图并提取执行路径
+# CFG构建：使用NetworkX图库构建控制流图
+# 路径枚举：从方法入口到所有出口点的所有简单路径
+# AST解析：基于javalang解析Java代码结构
 
 import sys
 from collections import defaultdict

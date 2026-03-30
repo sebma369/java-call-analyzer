@@ -1,10 +1,11 @@
-"""Call chain analysis functionality."""
+# 调用链分析器 - 构建方法的调用关系图并提取调用链
+# 在调用关系图上进行向上向下BFS
 
 from collections import deque
 
 
 def build_call_chains(target_methods, callers, callees, max_depth=10):
-    """Build upward and downward call chains for target methods."""
+    # 构建目标方法的向上和向下调用链
     up_chains = []
     down_chains = []
 

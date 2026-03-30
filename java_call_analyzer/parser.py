@@ -1,4 +1,4 @@
-"""Java code parsing functionality."""
+#java AST 文件解析器，使用 javalang 库从 Java 代码中提取方法定义和调用关系。
 
 import sys
 from collections import defaultdict
@@ -9,11 +9,11 @@ from .utils import find_java_files, get_package, full_class_name
 
 
 def collect_methods_and_calls(repo_root):
-    """Parse all Java files and collect method definitions and call relationships."""
-    method_defs = {} # method key 到属性的映射
+    # 解析所有 Java 文件，收集方法定义和调用关系。
+    method_defs = {}
     methods_by_name = defaultdict(set)
-    callers = defaultdict(set)  # callee -> set(caller)
-    callees = defaultdict(set)  # caller -> set(callee)
+    callers = defaultdict(set)  
+    callees = defaultdict(set) 
 
     for java_file in find_java_files(repo_root):
         with open(java_file, 'r', encoding='utf-8', errors='ignore') as f:
@@ -119,7 +119,7 @@ def collect_methods_and_calls(repo_root):
 
 
 def collect_target_methods(target_java_file):
-    """Collect all method signatures from the target Java file."""
+    # 从目标 Java 文件中收集方法定义，返回方法标识符列表。
     methods = []
     with open(target_java_file, 'r', encoding='utf-8', errors='ignore') as f:
         text = f.read()
