@@ -9,6 +9,16 @@ from typing import Any
 from ..analysis.call_chain import build_call_chains
 from ..analysis.execution_paths import analyze_execution_paths
 from ..analysis.java_parser import collect_methods_and_calls, collect_target_methods
+from .compile_error_prompt import build_compile_error_prompt
+from .coverage_prompt import build_coverage_improve_prompt
+from .initialization_prompt import build_initialization_prompt
+from .report_focus import (
+    extract_compile_error_focus,
+    extract_coverage_focus,
+    extract_runtime_error_focus,
+    load_defects4j_run_report,
+)
+from .runtime_error_prompt import build_runtime_error_prompt
 
 
 @dataclass
@@ -217,6 +227,37 @@ def compose_round_prompt(
         "extra_context": extra_context,
     }
     return payload
+
+
+def build_targeted_prompt(
+    prompt_result: PromptBuildResult,
+    prompt_type: str,
+    report_or_path: dict[str, Any] | str | None = None,
+) -> str:
+    """Build one of four prompt types for iterative LLM improvement loop.
+
+    Supported prompt_type:
+    - initialization
+    - compile-error
+    - runtime-error
+    - coverage
+    """
+    prompt_type = prompt_type.strip().lower()
+
+    if prompt_type == "initialization":
+        return build_initialization_prompt(prompt_result)
+
+    if report_or_path is None:
+        raise ValueError("report_or_path 在非 initialization prompt 中是必需的")
+
+    if prompt_type == "compile-error":
+        return build_compile_error_prompt(prompt_result, report_or_path)
+    if prompt_type == "runtime-error":
+        return build_runtime_error_prompt(prompt_result, report_or_path)
+    if prompt_type == "coverage":
+        return build_coverage_improve_prompt(prompt_result, report_or_path)
+
+    raise ValueError(f"不支持的 prompt_type: {prompt_type}")
 
 
 class StructuredPromptBuilder:

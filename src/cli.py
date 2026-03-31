@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         '--mode',
         choices=['call-chain', 'execution-path', 'structured-prompt', 'llm-generate'],
-        default='call-chain',
+        default='llm-generate',
         help='分析模式:call-chain(调用链)、execution-path(执行路径)、structured-prompt(结构化Prompt)或 llm-generate(调用大模型生成测试)'
     )
     parser.add_argument('--repo', type=str, help='Java 代码仓库根目录(call-chain/structured-prompt)')
@@ -39,7 +39,19 @@ def main():
     parser.add_argument('--prompt-out', type=str, help='structured-prompt模式下输出文件路径(可选)')
     parser.add_argument('--prompt-json-out', type=str, help='structured-prompt模式下JSON输出文件路径(可选)')
     parser.add_argument('--llm-out', type=str, help='llm-generate模式下模型输出保存路径(可选)')
-    parser.add_argument('--apply-generated-test', action='store_true', help='llm-generate后自动提取并写入测试代码，然后编译并运行测试')
+    parser.add_argument(
+        '--apply-generated-test',
+        dest='apply_generated_test',
+        action='store_true',
+        default=True,
+        help='llm-generate后自动提取并写入测试代码，然后编译并运行测试(默认开启)'
+    )
+    parser.add_argument(
+        '--no-apply-generated-test',
+        dest='apply_generated_test',
+        action='store_false',
+        help='关闭llm-generate后自动写入并执行测试'
+    )
     parser.add_argument('--test-project-root', type=str, help='测试代码写入与执行的项目根目录(默认与--repo相同)')
     parser.add_argument('--defects4j-bin', type=str, default='/usr/src/defects4j/framework/bin/defects4j', help='defects4j 可执行文件路径')
     parser.add_argument('--no-auto-clean', action='store_true', help='关闭自动清理模式（默认开启）')

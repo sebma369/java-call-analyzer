@@ -3,12 +3,21 @@
 from pathlib import Path
 
 from src.prompting.structured_prompt import (
+    build_compile_error_prompt,
+    build_coverage_improve_prompt,
+    build_initialization_prompt,
+    build_runtime_error_prompt,
     PromptSourceInfo,
     StructuredPromptBuilder,
     build_structured_prompt,
+    build_targeted_prompt,
     compose_round_prompt,
+    extract_compile_error_focus,
+    extract_coverage_focus,
+    extract_runtime_error_focus,
     get_default_prompt_output_path,
     get_default_prompt_json_output_path,
+    load_defects4j_run_report,
     save_prompt_json,
     save_prompt_text,
 )
@@ -158,3 +167,114 @@ def test_prompt_json_path_and_save(tmp_path):
     saved_path = save_prompt_json({"ok": True}, out_path)
     assert Path(saved_path).is_file()
     assert '"ok": true' in Path(saved_path).read_text(encoding="utf-8")
+
+
+def _sample_run_report() -> dict:
+    return {
+        "status": "runtime-failed",
+        "coverage_exit_code": 1,
+        "stdout": "Compile failed: cannot find symbol\nerror: package org.junit does not exist",
+        "stderr": "[javac] error: cannot find symbol Assert",
+        "failing_tests": (
+            "--- org.example.MyGeneratedTest::testFoo\n"
+            "java.lang.NoClassDefFoundError: org/hamcrest/SelfDescribing\n"
+            "\tat org.example.MyGeneratedTest.testFoo(MyGeneratedTest.java:25)\n"
+        ),
+        "coverage_summary": {
+            "line_coverage_percent": 35.0,
+            "condition_coverage_percent": 20.0,
+            "covered_lines": 7,
+            "total_executable_lines": 20,
+            "covered_conditions": 1,
+            "total_conditions": 5,
+            "uncovered_lines": [11, 12, 13, 18],
+        },
+    }
+
+
+def test_load_report_from_dict_and_json_file(tmp_path):
+    report = _sample_run_report()
+    loaded = load_defects4j_run_report(report)
+    assert loaded["status"] == "runtime-failed"
+
+    report_path = tmp_path / "run_report.json"
+    report_path.write_text('{"status":"ok"}', encoding="utf-8")
+    loaded_from_file = load_defects4j_run_report(str(report_path))
+    assert loaded_from_file["status"] == "ok"
+
+
+def test_extract_focus_sections_from_report():
+    report = _sample_run_report()
+
+    compile_focus = extract_compile_error_focus(report)
+    assert compile_focus["coverage_exit_code"] == 1
+    assert any("cannot find symbol" in line for line in compile_focus["compile_error_lines"])
+
+    runtime_focus = extract_runtime_error_focus(report)
+    assert "NoClassDefFoundError" in runtime_focus["exception"]
+    assert "MyGeneratedTest" in runtime_focus["failed_test_headline"]
+
+    coverage_focus = extract_coverage_focus(report)
+    assert coverage_focus["line_coverage_percent"] == 35.0
+    assert coverage_focus["uncovered_lines_preview"] == [11, 12, 13, 18]
+
+
+def test_build_targeted_prompts_from_report_data():
+    test_dir = Path(__file__).parent / "test_data"
+    target_file = test_dir / "B.java"
+    result = build_structured_prompt(
+        repo_root=str(test_dir),
+        target_file=str(target_file),
+        depth=6,
+    )
+    report = _sample_run_report()
+
+    init_prompt = build_initialization_prompt(result)
+    assert "=== Target Code ===" in init_prompt
+
+    compile_prompt = build_compile_error_prompt(result, report)
+    assert "Compile Error Repair Prompt" in compile_prompt
+    assert "cannot find symbol" in compile_prompt
+
+    runtime_prompt = build_runtime_error_prompt(result, report)
+    assert "Runtime Error Repair Prompt" in runtime_prompt
+    assert "NoClassDefFoundError" in runtime_prompt
+
+    coverage_prompt = build_coverage_improve_prompt(result, report)
+    assert "Coverage Improvement Prompt" in coverage_prompt
+    assert "uncovered_lines_preview" in coverage_prompt
+
+
+def test_build_targeted_prompt_dispatch_and_validation():
+    test_dir = Path(__file__).parent / "test_data"
+    target_file = test_dir / "B.java"
+    result = build_structured_prompt(
+        repo_root=str(test_dir),
+        target_file=str(target_file),
+        depth=6,
+    )
+    report = _sample_run_report()
+
+    text = build_targeted_prompt(result, "compile-error", report)
+    assert "Compile Error Repair Prompt" in text
+
+    text = build_targeted_prompt(result, "runtime-error", report)
+    assert "Runtime Error Repair Prompt" in text
+
+    text = build_targeted_prompt(result, "coverage", report)
+    assert "Coverage Improvement Prompt" in text
+
+    text = build_targeted_prompt(result, "initialization")
+    assert "Task Instruction" in text
+
+    try:
+        build_targeted_prompt(result, "coverage")
+        raise AssertionError("Expected ValueError when report is missing")
+    except ValueError as exc:
+        assert "report_or_path" in str(exc)
+
+    try:
+        build_targeted_prompt(result, "unsupported", report)
+        raise AssertionError("Expected ValueError for unsupported type")
+    except ValueError as exc:
+        assert "不支持的 prompt_type" in str(exc)
