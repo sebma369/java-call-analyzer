@@ -9,7 +9,7 @@ from collections import defaultdict
 import javalang
 import networkx as nx
 
-from .utils import get_package, full_class_name
+from ..utils import get_package, full_class_name
 
 
 class CFGBuilder:

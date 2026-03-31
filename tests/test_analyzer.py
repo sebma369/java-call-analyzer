@@ -4,8 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from java_call_analyzer.parser import collect_methods_and_calls, collect_target_methods
-from java_call_analyzer.analyzer import build_call_chains
+from src.analysis.java_parser import collect_methods_and_calls, collect_target_methods
+from src.analysis.call_chain import build_call_chains
 
 
 def test_collect_target_methods():
@@ -63,7 +63,7 @@ def test_build_call_chains():
 
 def test_analyze_execution_paths():
     #测试分析方法执行路径的功能。
-    from java_call_analyzer.execution_path_analyzer import analyze_execution_paths
+    from src.analysis.execution_paths import analyze_execution_paths
 
     test_file = Path(__file__).parent / "test_data" / "ExecutionPathTest.java"
     results = analyze_execution_paths(str(test_file))

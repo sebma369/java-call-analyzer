@@ -3,6 +3,11 @@
 import os
 
 
+def get_project_root() -> str:
+    # 返回 TestGen 项目根目录。
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
 def find_java_files(root):
     # 找到给定目录下的所有 Java 文件，递归搜索。
     for dirpath, _, filenames in os.walk(root):

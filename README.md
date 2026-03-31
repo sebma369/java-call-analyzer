@@ -1,142 +1,79 @@
-# Java Static Analyzer
+# TestGen
 
-一个用于静态分析 Java 代码的工具，支持方法调用链分析和执行路径分析。
+用于 Java 测试生成与分析的工具链：静态分析 -> 结构化 Prompt -> LLM 生成 -> Defects4J 执行与覆盖率报告。
 
-## 项目结构
+## 目录结构
 
-```
+```text
 TestGen/
-├── java_call_analyzer/           # 主包目录
-│   ├── __init__.py               # 包初始化
-│   ├── analyzer.py               # 调用链分析逻辑
-│   ├── cli.py                    # 命令行接口
-│   ├── execution_path_analyzer.py # 执行路径分析逻辑
-│   ├── parser.py                 # Java 代码解析
-│   └── utils.py                  # 工具函数
-├── scripts/                      # 脚本目录
-│   └── run.py                    # 运行脚本
-├── tests/                        # 测试文件
-│   ├── test_analyzer.py
-│   └── test_data/
-├── environment.yml               # Conda 环境配置
-└── README.md                     # 项目文档
+├── src/
+│   ├── analysis/                # 静态分析层
+│   │   ├── call_chain.py
+│   │   ├── execution_paths.py
+│   │   └── java_parser.py
+│   ├── prompting/               # Prompt 组装层
+│   │   └── structured_prompt.py
+│   ├── integration/             # 外部服务集成层
+│   │   └── openai_client.py
+│   ├── runners/                 # 执行器层
+│   │   └── defects4j_runner.py
+│   ├── cli.py
+│   ├── utils.py
+│   └── (兼容包装模块)
+├── tests/
+├── scripts/
+└── tmp/                         # 统一临时产物目录
+		├── prompts/
+		└── run_*/
 ```
 
-## 功能特性
+说明：历史模块名（如 `parser.py`、`analyzer.py`）保留为兼容包装，内部转发到新结构，便于平滑迁移。
 
-### 1. 方法调用链分析 (call-chain)
-- 分析方法间的调用关系
-- 支持向上调用链（谁调用了我）和向下调用链（我调用了谁）
-- 可配置最大分析深度
+## 核心功能
 
-### 2. 执行路径分析 (execution-path)
-- 分析方法内部的所有执行路径
-- 通过控制流图 (CFG) 识别分支、循环等结构
-- 输出每个方法的所有可能执行路径
+1. `call-chain`：方法调用链分析（向上/向下）。
+2. `execution-path`：方法执行路径分析（CFG）。
+3. `structured-prompt`：构建结构化 Prompt（文本 + JSON）。
+4. `llm-generate`：调用 LLM 生成测试代码。
+5. `--apply-generated-test`：使用 `Defects4jRunner` 一次性执行生成测试并输出覆盖率摘要。
+
+## 临时文件策略
+
+所有临时输出统一写入 `tmp/`：
+
+1. Prompt 与 LLM 输出：`tmp/prompts/`
+2. 每轮执行报告：`tmp/run_<timestamp>/`
+3. Defects4J 执行后的清理与还原默认开启，便于下一轮复用。
 
 ## 快速开始
-
-### 1. 创建环境
 
 ```bash
 conda env create -f environment.yml
 conda activate testgen
+python -m pytest tests/ -q
 ```
 
-### 2. 运行分析
+## 常用命令
 
-#### 方法调用链分析
-```bash
-# 需要指定仓库目录和目标文件
-python -m java_call_analyzer.cli --mode call-chain --repo /path/to/repo /path/to/target/File.java
-
-# 示例
-python -m java_call_analyzer.cli --mode call-chain --repo tests/test_data tests/test_data/B.java
-```
-
-#### 执行路径分析
-```bash
-# 只需要指定目标文件
-python -m java_call_analyzer.cli --mode execution-path /path/to/target/File.java
-
-# 示例
-python -m java_call_analyzer.cli --mode execution-path tests/test_data/ExecutionPathTest.java
-```
-
-### 3. 运行测试
+调用链分析：
 
 ```bash
-python -m pytest tests/ -v
+python -m src.cli --mode call-chain --repo tests/test_data tests/test_data/B.java
 ```
 
-## 输出
-
-工具为目标文件中的每个方法输出：
-
-- ↑ 向上调用链（谁调用了我）
-- ↓ 向下调用链（我调用了谁）
-
-## 运行测试
+结构化 Prompt：
 
 ```bash
-python -m pytest tests/
+python -m src.cli --mode structured-prompt --repo tests/test_data tests/test_data/B.java
 ```
 
-## 开发
-
-### 代码格式化
+LLM 生成并在 Defects4J 执行：
 
 ```bash
-pip install black isort
-black java_call_analyzer/ tests/ scripts/
-isort java_call_analyzer/ tests/ scripts/
-```
-
-### 代码检查
-
-```bash
-pip install flake8
-flake8 java_call_analyzer/ tests/ scripts/
-```
-
-```python
-from java_call_analyzer.parser import collect_methods_and_calls, collect_target_methods
-from java_call_analyzer.analyzer import build_call_chains
-
-# 解析仓库
-method_defs, callers, callees = collect_methods_and_calls(repo_root)
-
-# 收集目标方法
-target_methods = collect_target_methods(target_file)
-
-# 构建调用链
-up_chains, down_chains = build_call_chains(target_methods, callers, callees)
-```
-
-## 输出
-
-工具为目标文件中的每个方法输出：
-
-- ↑ 向上调用链（谁调用了我）
-- ↓ 向下调用链（我调用了谁）
-
-## 运行测试
-
-```bash
-pytest
-```
-
-## 开发
-
-### 代码格式化
-
-```bash
-black src/ tests/
-isort src/ tests/
-```
-
-### 代码检查
-
-```bash
-flake8 src/ tests/
+python -m src.cli \
+	--mode llm-generate \
+	--repo /usr/src/defects4j/Cli-1b \
+	--apply-generated-test \
+	--test-project-root /usr/src/defects4j/Cli-1b \
+	/usr/src/defects4j/Cli-1b/src/java/org/apache/commons/cli/GnuParser.java
 ```
