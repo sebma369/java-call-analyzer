@@ -1,4 +1,3 @@
-"""Command line interface for Java static analyzer."""
 
 import argparse
 import os
@@ -25,7 +24,7 @@ from .prompting.structured_prompt import (
 
 
 def main():
-    """Main entry point for the CLI."""
+    # CLI 入口，解析命令行参数，根据选择的分析模式执行相应的功能，并输出结果。
     parser = argparse.ArgumentParser(description='Java 静态分析工具')
     parser.add_argument('target', type=str, help='目标 Java 文件路径(绝对或相对)')
     parser.add_argument(
@@ -34,8 +33,8 @@ def main():
         default='llm-generate',
         help='分析模式:call-chain(调用链)、execution-path(执行路径)、structured-prompt(结构化Prompt)或 llm-generate(调用大模型生成测试)'
     )
-    parser.add_argument('--repo', type=str, help='Java 代码仓库根目录(call-chain/structured-prompt)')
-    parser.add_argument('--depth', type=int, default=10, help='最大深度(call-chain/structured-prompt)')
+    parser.add_argument('--repo', type=str, help='Java 代码仓库根目录')
+    parser.add_argument('--depth', type=int, default=10, help='最大深度')
     parser.add_argument('--prompt-out', type=str, help='structured-prompt模式下输出文件路径(可选)')
     parser.add_argument('--prompt-json-out', type=str, help='structured-prompt模式下JSON输出文件路径(可选)')
     parser.add_argument('--llm-out', type=str, help='llm-generate模式下模型输出保存路径(可选)')

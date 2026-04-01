@@ -289,7 +289,6 @@ class StructuredPromptBuilder:
         down_chains: list[tuple[str, list[str]]],
         execution_paths: dict[str, list[list[str]]],
     ) -> str:
-        """Create a deterministic, structured prompt text."""
         lines: list[str] = []
 
         lines.append("=== Prompt Source ===")

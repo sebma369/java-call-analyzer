@@ -1,4 +1,4 @@
-"""Helpers to extract, write, compile, and run generated Java tests."""
+# 在 Defects4J 项目中运行生成的测试代码，收集覆盖率和执行结果，并进行清理。
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,7 +12,7 @@ from typing import Any
 
 @dataclass
 class CommandResult:
-    """Result of a shell command execution."""
+    # 执行命令的结果，包括命令本身、退出代码、标准输出和标准错误。
 
     command: list[str]
     exit_code: int
@@ -22,7 +22,7 @@ class CommandResult:
 
 @dataclass
 class GeneratedTestRunResult:
-    """Summary for generated-test extraction and execution flow."""
+    # 生成测试的提取和执行流程摘要。
 
     test_file_path: str
     package_name: str
@@ -36,7 +36,7 @@ class GeneratedTestRunResult:
 
 @dataclass
 class CoverageSummary:
-    """Coverage summary for a specific target class."""
+    # 覆盖率摘要，用于特定目标类。
 
     target_class: str
     total_executable_lines: int
@@ -50,7 +50,7 @@ class CoverageSummary:
 
 @dataclass
 class Defects4jRunResult:
-    """End-to-end result for generated test execution with Defects4J."""
+    # 端到端运行生成测试的结果，包括状态、文件路径、覆盖率结果和清理信息。
 
     status: str
     test_file_path: str
@@ -82,19 +82,19 @@ MUTABLE_FILE_PATHS = [
 
 
 def get_testgen_root() -> str:
-    """Return TestGen project root path."""
+    # 返回 TestGen 项目的根目录绝对路径，假设当前文件在 src/runners/ 下。
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 def ensure_temp_root(temp_root: str | None = None) -> str:
-    """Ensure a temporary root directory under TestGen and return it."""
+    # 确保临时目录存在，优先使用传入的 temp_root，否则在项目根目录下创建 tmp/。
     root = temp_root or os.path.join(get_testgen_root(), "tmp")
     os.makedirs(root, exist_ok=True)
     return root
 
 
 def create_run_temp_dir(temp_root: str | None = None) -> str:
-    """Create per-run temporary directory for reports and intermediate files."""
+    # 在临时目录下创建一个唯一的子目录用于当前运行，格式为 run_YYYYMMDDTHHMMSSZ[_N]。
     root = ensure_temp_root(temp_root)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = os.path.join(root, f"run_{run_id}")
@@ -107,7 +107,7 @@ def create_run_temp_dir(temp_root: str | None = None) -> str:
 
 
 def snapshot_artifact_state(project_root: str) -> dict[str, bool]:
-    """Snapshot artifact path existence before running commands."""
+    # 快照工件路径存在状态，用于在运行命令前检查。
     state: dict[str, bool] = {}
     for rel_path in ARTIFACT_PATHS:
         abs_path = os.path.join(project_root, rel_path)
@@ -116,7 +116,7 @@ def snapshot_artifact_state(project_root: str) -> dict[str, bool]:
 
 
 def snapshot_file_contents(project_root: str, rel_paths: list[str]) -> dict[str, str | None]:
-    """Snapshot selected file contents for exact restore after run."""
+    # 快照指定文件的内容，如果文件不存在则记录为 None。
     snapshot: dict[str, str | None] = {}
     for rel_path in rel_paths:
         abs_path = os.path.join(project_root, rel_path)
@@ -129,7 +129,7 @@ def snapshot_file_contents(project_root: str, rel_paths: list[str]) -> dict[str,
 
 
 def restore_file_contents(project_root: str, snapshot: dict[str, str | None]) -> list[str]:
-    """Restore selected files to snapshotted content/state."""
+    # 根据快照恢复文件内容，如果快照为 None 则删除文件。
     restored: list[str] = []
     for rel_path, content in snapshot.items():
         abs_path = os.path.join(project_root, rel_path)
@@ -146,7 +146,7 @@ def restore_file_contents(project_root: str, snapshot: dict[str, str | None]) ->
 
 
 def remove_path(path: str) -> None:
-    """Remove a file or directory path if it exists."""
+    # 删除指定路径，无论是文件还是目录，如果路径不存在则不执行任何操作。
     if not os.path.exists(path):
         return
     if os.path.isdir(path):
@@ -156,7 +156,7 @@ def remove_path(path: str) -> None:
 
 
 def restore_or_remove_generated_test(test_file_path: str, previous_content: str | None) -> None:
-    """Restore previous test file content or remove newly created file."""
+    # 如果之前存在测试文件内容，则恢复它；否则删除生成的测试文件。
     if previous_content is None:
         remove_path(test_file_path)
         return
@@ -171,7 +171,7 @@ def cleanup_generated_run(
     previous_test_content: str | None,
     file_content_snapshot: dict[str, str | None] | None = None,
 ) -> list[str]:
-    """Cleanup artifacts created during generated test execution."""
+    # 清理生成测试运行的产物：恢复或删除测试文件，删除新产生的工件，并根据快照恢复文件内容。
     cleaned: list[str] = []
 
     restore_or_remove_generated_test(test_file_path, previous_test_content)
@@ -190,7 +190,7 @@ def cleanup_generated_run(
 
 
 def extract_java_code_block(llm_output_text: str) -> str:
-    """Extract Java code from markdown code fences; fallback to raw text."""
+    # 从 LLM 输出中提取 Java 代码块，优先返回包含 "class " 的块，如果没有则返回第一个代码块，如果没有代码块则返回原文本。
     blocks = re.findall(r"```(?:java)?\s*(.*?)```", llm_output_text, flags=re.DOTALL | re.IGNORECASE)
     if not blocks:
         return llm_output_text.strip()
@@ -202,13 +202,13 @@ def extract_java_code_block(llm_output_text: str) -> str:
 
 
 def extract_package_name(java_code: str) -> str:
-    """Extract package name from Java code."""
+    # 从 Java 代码中提取 package 声明，如果没有则返回空字符串。
     match = re.search(r"\bpackage\s+([A-Za-z_][\w\.]*)\s*;", java_code)
     return match.group(1) if match else ""
 
 
 def extract_target_class_fqn(target_file: str) -> str:
-    """Infer fully-qualified target class name from Java source file."""
+    # 从目标 Java 文件中提取完全限定类名（FQN），通过解析 package 声明和 public class 名称，如果没有 package 则返回类名。
     with open(target_file, "r", encoding="utf-8", errors="ignore") as file_obj:
         text = file_obj.read()
     package_name = extract_package_name(text)
@@ -217,7 +217,7 @@ def extract_target_class_fqn(target_file: str) -> str:
 
 
 def extract_public_class_name(java_code: str) -> str:
-    """Extract public class name from Java code."""
+    # 从 Java 代码中提取 public class 的名称，如果没有找到则抛出异常。
     match = re.search(r"\bpublic\s+class\s+([A-Za-z_][\w]*)\b", java_code)
     if not match:
         raise ValueError("无法从生成代码中提取 public class 名称")
@@ -225,7 +225,7 @@ def extract_public_class_name(java_code: str) -> str:
 
 
 def extract_test_method_names(java_code: str) -> list[str]:
-    """Extract JUnit @Test method names from Java code."""
+    # 从 Java 代码中提取使用 @Test 注解的方法名称，支持带参数的注解和可选的 public 修饰符。
     methods = re.findall(
         r"@Test\s*(?:\([^)]*\)\s*)?(?:public\s+)?void\s+([A-Za-z_][\w]*)\s*\(",
         java_code,
@@ -235,14 +235,14 @@ def extract_test_method_names(java_code: str) -> list[str]:
 
 
 def infer_package_from_target_file(target_file: str) -> str:
-    """Infer package declaration from target Java file."""
+    # 从目标 Java 文件中推断包名，通过解析 package 声明，如果没有则返回空字符串。
     with open(target_file, "r", encoding="utf-8", errors="ignore") as file_obj:
         text = file_obj.read()
     return extract_package_name(text)
 
 
 def ensure_package_declaration(java_code: str, package_name: str) -> str:
-    """Ensure Java code has a package declaration if package_name is provided."""
+    # 确保生成的 Java 代码包含正确的 package 声明，如果已经存在则不修改，否则添加到代码顶部。
     if not package_name:
         return java_code
     if extract_package_name(java_code):
@@ -251,7 +251,7 @@ def ensure_package_declaration(java_code: str, package_name: str) -> str:
 
 
 def resolve_test_file_path(project_root: str, package_name: str, class_name: str) -> str:
-    """Build target path under src/test based on package/class name."""
+    # 根据包名和类名解析生成测试文件的路径，通常位于 src/test/ 下对应的包目录中，如果没有包则直接放在 src/test/。
     if package_name:
         package_path = package_name.replace(".", os.sep)
         return os.path.join(project_root, "src", "test", package_path, f"{class_name}.java")
@@ -259,7 +259,7 @@ def resolve_test_file_path(project_root: str, package_name: str, class_name: str
 
 
 def write_generated_test_file(project_root: str, java_code: str) -> tuple[str, str, str, str | None]:
-    """Write generated Java test code into project src/test directory."""
+    # 将生成的 Java 代码写入项目中适当的位置，返回测试文件路径、包名、类名和之前的文件内容（如果存在）。
     package_name = extract_package_name(java_code)
     class_name = extract_public_class_name(java_code)
     test_file_path = resolve_test_file_path(project_root, package_name, class_name)
@@ -277,7 +277,7 @@ def write_generated_test_file(project_root: str, java_code: str) -> tuple[str, s
 
 
 def run_command(command: list[str], cwd: str) -> CommandResult:
-    """Run shell command and capture stdout/stderr."""
+    # 在指定目录下运行命令并捕获结果，返回 CommandResult 对象。
     proc = subprocess.run(command, cwd=cwd, capture_output=True, text=True)
     return CommandResult(
         command=command,
@@ -288,7 +288,7 @@ def run_command(command: list[str], cwd: str) -> CommandResult:
 
 
 def parse_coverage_summary(coverage_xml_path: str, target_class_fqn: str) -> CoverageSummary | None:
-    """Parse cobertura coverage.xml and return target-class summary."""
+    # 从 Cobertura 生成的 coverage.xml 中解析指定目标类的覆盖率摘要，如果文件不存在或类未找到则返回 None。
     if not os.path.isfile(coverage_xml_path):
         return None
 
@@ -341,7 +341,7 @@ def parse_coverage_summary(coverage_xml_path: str, target_class_fqn: str) -> Cov
 
 
 def _write_suite_archive_for_generated_test(run_dir: str, package_name: str, class_name: str, java_code: str) -> str:
-    """Write external suite archive (.tar.bz2) accepted by defects4j -s."""
+    # 将生成的测试代码写入临时目录中的适当位置，并创建一个 tar.bz2 格式的归档，返回归档路径。
     suite_src_dir = os.path.join(run_dir, 'suite_src')
     if package_name:
         rel_dir = package_name.replace('.', os.sep)
@@ -361,7 +361,7 @@ def _write_suite_archive_for_generated_test(run_dir: str, package_name: str, cla
 
 
 def _read_failing_tests(project_root: str) -> str:
-    """Read failing_tests artifact if present."""
+    # 从项目根目录下的 failing_tests 文件中读取内容，如果文件不存在则返回空字符串。
     path = os.path.join(project_root, 'failing_tests')
     if not os.path.isfile(path):
         return ''
@@ -370,7 +370,7 @@ def _read_failing_tests(project_root: str) -> str:
 
 
 def _save_run_report(run_dir: str, report: dict[str, Any]) -> str:
-    """Persist run report JSON under run temp directory."""
+    # 将运行结果报告保存为 JSON 文件，返回保存的文件路径。
     out_path = os.path.join(run_dir, 'defects4j_run_report.json')
     with open(out_path, 'w', encoding='utf-8') as file_obj:
         json.dump(report, file_obj, ensure_ascii=False, indent=2)
@@ -378,7 +378,7 @@ def _save_run_report(run_dir: str, report: dict[str, Any]) -> str:
 
 
 class Defects4jRunner:
-    """One-shot generated test runner for Defects4J projects."""
+    # Defects4J 运行器，负责将 LLM 输出的测试代码写入项目、运行覆盖率命令、解析结果并进行清理。
 
     def __init__(self, defects4j_bin: str, auto_clean: bool = True, temp_root: str | None = None):
         self.defects4j_bin = defects4j_bin
@@ -495,7 +495,7 @@ def apply_and_run_generated_test(
     defects4j_bin: str,
     auto_clean: bool = True,
 ) -> GeneratedTestRunResult:
-    """Extract test code, write to project, compile, and run generated test methods."""
+    # 应用生成的测试代码，运行 Defects4J 的覆盖率命令，并返回一个包含执行结果和覆盖率摘要的 GeneratedTestRunResult 对象。
     java_code = extract_java_code_block(llm_output_text)
     target_package = infer_package_from_target_file(target_file)
     java_code = ensure_package_declaration(java_code, target_package)
@@ -546,7 +546,7 @@ def apply_and_run_generated_test(
 
 
 def summarize_run_result(run_result: GeneratedTestRunResult) -> dict[str, Any]:
-    """Build a compact summary for CLI/JSON reporting."""
+    # 将 GeneratedTestRunResult 对象转换为一个简化的字典摘要，包含测试文件路径、测试类、测试方法列表、编译结果和测试结果的退出码，以及清理信息。
     full_class_name = (
         f"{run_result.package_name}.{run_result.class_name}"
         if run_result.package_name
