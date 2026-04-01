@@ -1,4 +1,4 @@
-"""Runtime-error repair prompt builder."""
+# 运行时错误修复提示构建模块
 
 from typing import Any
 
@@ -9,7 +9,7 @@ def build_runtime_error_prompt(
     prompt_result: Any,
     report_or_path: dict[str, Any] | str,
 ) -> str:
-    """Build prompt targeted at runtime-failure repair."""
+    # 构建针对运行时错误修复的提示文本
     report = load_defects4j_run_report(report_or_path)
     focus = extract_runtime_error_focus(report)
 

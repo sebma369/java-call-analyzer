@@ -1,4 +1,4 @@
-"""LLM client for sending structured prompts and receiving test code output."""
+#调用LLM API的实用程序函数和数据类，并获取LLM响应文本
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,7 +13,6 @@ DEFAULT_LLM_MODEL = "gpt-5-mini"
 
 @dataclass
 class LLMConfig:
-    """Configuration for LLM API calls."""
 
     endpoint: str = DEFAULT_LLM_ENDPOINT
     api_key: str = DEFAULT_LLM_API_KEY
@@ -24,7 +23,7 @@ class LLMConfig:
 
 @dataclass
 class LLMCallResult:
-    """Result wrapper for LLM call."""
+    # LLM调用结果的结构化表示，包括响应文本、原始响应数据和使用的模型名称。
 
     response_text: str
     raw_response: dict[str, Any]
@@ -32,7 +31,7 @@ class LLMCallResult:
 
 
 def build_chat_payload(prompt_text: str, config: LLMConfig) -> dict[str, Any]:
-    """Build a generic chat-completions payload for LLM APIs."""
+    # 构建符合OpenAI聊天接口规范的请求负载，包括模型名称、温度设置和消息列表。
     return {
         "model": config.model,
         "temperature": config.temperature,
@@ -50,7 +49,7 @@ def build_chat_payload(prompt_text: str, config: LLMConfig) -> dict[str, Any]:
 
 
 def extract_response_text(raw_response: dict[str, Any]) -> str:
-    """Extract assistant text from a chat-completions style response."""
+    # 从LLM API的原始响应中提取助手生成的文本内容，处理不同格式的内容字段。
     choices = raw_response.get("choices", [])
     if not choices:
         return ""
@@ -71,7 +70,7 @@ def extract_response_text(raw_response: dict[str, Any]) -> str:
 
 
 def _create_openai_client(config: LLMConfig):
-    """Create OpenAI SDK client with configured base URL and key."""
+    # 创建并返回一个配置好的OpenAI客户端实例，用于后续的API调用。
     from openai import OpenAI
 
     return OpenAI(
@@ -82,7 +81,7 @@ def _create_openai_client(config: LLMConfig):
 
 
 def call_llm_with_prompt(prompt_text: str, config: LLMConfig) -> LLMCallResult:
-    """Call LLM endpoint with prompt and return parsed result."""
+    # 使用提供的提示文本和LLM配置调用LLM API，处理响应并返回结构化的调用结果。
 
     payload = build_chat_payload(prompt_text, config)
     try:
@@ -107,7 +106,7 @@ def call_llm_with_prompt(prompt_text: str, config: LLMConfig) -> LLMCallResult:
 
 
 def get_default_llm_output_path(project_root: str, target_file: str) -> str:
-    """Build deterministic output path for LLM-generated code."""
+    # 生成默认的LLM输出文件路径，位于项目的tmp/prompts目录下，文件名包含目标文件名和时间戳。
     prompt_dir = os.path.join(project_root, "tmp", "prompts")
     os.makedirs(prompt_dir, exist_ok=True)
 
@@ -118,7 +117,7 @@ def get_default_llm_output_path(project_root: str, target_file: str) -> str:
 
 
 def save_llm_output_text(output_text: str, output_path: str) -> str:
-    """Persist LLM output text and return absolute output path."""
+    # 将LLM输出文本保存到指定路径，确保目录存在，并返回保存的绝对路径。
     abs_path = os.path.abspath(output_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     with open(abs_path, "w", encoding="utf-8") as file_obj:

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Java Call Analyzer - 运行脚本
+Java TestGen - 运行脚本
 
-直接运行此脚本启动 Java 调用链分析工具。
+直接运行此脚本启动 Java 测试生成工具。
 
-用法:
-    python scripts/run.py /path/to/repo /path/to/target/File.java
 """
 
 import sys

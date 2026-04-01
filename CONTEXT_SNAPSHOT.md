@@ -1,7 +1,3 @@
-# TestGen Context Snapshot (Current State)
-
-本文件是面向后续开发的精简上下文，只保留当前结构与职责，不记录历史改造过程。
-
 ## 1) 项目目标（当前）
 
 给定目标 Java 文件，执行以下流水线：

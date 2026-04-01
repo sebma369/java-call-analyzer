@@ -1,4 +1,4 @@
-"""Build structured prompts from static analysis results."""
+# 结构化提示构建模块
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -23,7 +23,7 @@ from .runtime_error_prompt import build_runtime_error_prompt
 
 @dataclass
 class PromptSourceInfo:
-    """Stores prompt source metadata for reuse and later extension."""
+    # 原始输入信息和可复用的分析上下文，用于构建结构化提示。
 
     repo_root: str
     target_file: str
@@ -42,7 +42,7 @@ class PromptSourceInfo:
 
 @dataclass
 class PromptBuildResult:
-    """Structured prompt output and intermediate data."""
+    # 构建结果封装，包括生成的提示文本、源信息、分析结果和迭代反馈历史。
 
     prompt: str
     source_info: PromptSourceInfo
@@ -77,7 +77,7 @@ class PromptBuildResult:
         include_execution_paths: bool = True,
         include_feedback_rounds: bool = True,
     ) -> dict[str, Any]:
-        """Export a machine-friendly payload for programmatic prompt assembly."""
+        # 构建包含源信息、分析结果和可选内容的机器友好型提示负载，用于后续场景特定的提示构建。
         payload: dict[str, Any] = {
             "source": {
                 "language": self.source_info.language,
@@ -133,7 +133,7 @@ class PromptBuildResult:
         include_execution_paths: bool = True,
         include_feedback_rounds: bool = True,
     ) -> str:
-        """Serialize machine-friendly payload as JSON string."""
+        # 将提示构建结果序列化为 JSON 字符串，包含可选的分析上下文和反馈历史，便于存储和后续处理。
         payload = self.to_payload(
             include_target_code=include_target_code,
             include_call_chains=include_call_chains,
@@ -144,13 +144,13 @@ class PromptBuildResult:
 
 
 def read_target_code(target_file: str) -> str:
-    """Read target Java code for prompt grounding."""
+    # 读取目标 Java 文件的内容，作为提示构建的一部分。
     with open(target_file, "r", encoding="utf-8", errors="ignore") as file_obj:
         return file_obj.read()
 
 
 def get_default_prompt_output_path(project_root: str, target_file: str) -> str:
-    """Build a deterministic output path under <project_root>/tmp/prompts/."""
+    # 构建一个确定性的文本输出路径，位于 <project_root>/tmp/prompts/ 目录下，文件名包含目标文件名和时间戳。
     prompt_dir = os.path.join(project_root, "tmp", "prompts")
     os.makedirs(prompt_dir, exist_ok=True)
 
@@ -161,7 +161,7 @@ def get_default_prompt_output_path(project_root: str, target_file: str) -> str:
 
 
 def get_default_prompt_json_output_path(project_root: str, target_file: str) -> str:
-    """Build a deterministic JSON output path under <project_root>/tmp/prompts/."""
+    # 构建一个确定性的 JSON 输出路径，位于 <project_root>/tmp/prompts/ 目录下，文件名包含目标文件名和时间戳。
     prompt_dir = os.path.join(project_root, "tmp", "prompts")
     os.makedirs(prompt_dir, exist_ok=True)
 
@@ -172,7 +172,7 @@ def get_default_prompt_json_output_path(project_root: str, target_file: str) -> 
 
 
 def save_prompt_text(prompt_text: str, output_path: str) -> str:
-    """Persist prompt text and return the absolute output path."""
+    # 持久化提示文本并返回绝对输出路径。
     abs_path = os.path.abspath(output_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     with open(abs_path, "w", encoding="utf-8") as file_obj:
@@ -181,7 +181,7 @@ def save_prompt_text(prompt_text: str, output_path: str) -> str:
 
 
 def save_prompt_json(payload: dict[str, Any], output_path: str) -> str:
-    """Persist prompt payload as JSON and return the absolute output path."""
+    # 持久化提示 JSON 数据并返回绝对输出路径。
     abs_path = os.path.abspath(output_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     with open(abs_path, "w", encoding="utf-8") as file_obj:
@@ -194,7 +194,7 @@ def compose_round_prompt(
     scenario: str,
     extra_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Compose scenario-specific payload for iterative test generation."""
+    # 场景化提示组装器，根据不同的迭代场景调整提示内容和指令，生成适合当前反馈的提示负载。
     scenario = scenario.strip().lower()
     extra_context = extra_context or {}
 
@@ -234,14 +234,6 @@ def build_targeted_prompt(
     prompt_type: str,
     report_or_path: dict[str, Any] | str | None = None,
 ) -> str:
-    """Build one of four prompt types for iterative LLM improvement loop.
-
-    Supported prompt_type:
-    - initialization
-    - compile-error
-    - runtime-error
-    - coverage
-    """
     prompt_type = prompt_type.strip().lower()
 
     if prompt_type == "initialization":
@@ -261,13 +253,13 @@ def build_targeted_prompt(
 
 
 class StructuredPromptBuilder:
-    """Builds structured prompts from call-chain and execution-path outputs."""
+    # 结构化提示构建器，基于输入源信息进行代码分析，生成包含上下文和指令的结构化提示文本。
 
     def __init__(self, source_info: PromptSourceInfo):
         self.source_info = source_info
 
     def build(self) -> PromptBuildResult:
-        """Run analyses and build a structured prompt."""
+        # 执行代码分析，收集目标方法、调用链和执行路径，并格式化成结构化提示文本。
         method_defs, callers, callees = collect_methods_and_calls(self.source_info.repo_root)
         target_methods = collect_target_methods(self.source_info.target_file)
         if not self.source_info.target_code:
@@ -379,7 +371,7 @@ def build_structured_prompt(
     depth: int = 10,
     metadata: dict[str, Any] | None = None,
 ) -> PromptBuildResult:
-    """Convenience helper to build a prompt in one call."""
+    # 构建结构化提示的主函数，接受仓库根路径、目标文件路径、分析深度和可选的元数据，返回包含提示文本和分析结果的构建结果对象。
     source_info = PromptSourceInfo(
         repo_root=repo_root,
         target_file=target_file,

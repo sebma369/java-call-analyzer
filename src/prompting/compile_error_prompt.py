@@ -1,4 +1,4 @@
-"""Compile-error repair prompt builder."""
+# 编译错误修复提示构建模块
 
 from typing import Any
 
@@ -9,7 +9,7 @@ def build_compile_error_prompt(
     prompt_result: Any,
     report_or_path: dict[str, Any] | str,
 ) -> str:
-    """Build prompt targeted at compile-error repair."""
+    # 构建针对编译错误修复的提示文本，包含目标代码和编译错误相关信息，指导生成可编译的测试代码。
     report = load_defects4j_run_report(report_or_path)
     focus = extract_compile_error_focus(report)
 

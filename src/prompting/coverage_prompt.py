@@ -1,4 +1,4 @@
-"""Coverage-improvement prompt builder."""
+# 覆盖率提升提示构建模块
 
 from typing import Any
 
@@ -9,7 +9,7 @@ def build_coverage_improve_prompt(
     prompt_result: Any,
     report_or_path: dict[str, Any] | str,
 ) -> str:
-    """Build prompt targeted at improving line/branch coverage."""
+    # 构建针对覆盖率提升的提示文本
     report = load_defects4j_run_report(report_or_path)
     focus = extract_coverage_focus(report)
 

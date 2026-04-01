@@ -1,4 +1,4 @@
-"""Helpers for extracting focused Defects4J feedback signals."""
+# 报告分析模块，提取编译错误、运行时错误和覆盖率相关的关键信息，构建针对性的提示文本。
 
 import json
 import re
