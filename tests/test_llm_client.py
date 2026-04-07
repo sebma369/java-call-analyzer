@@ -6,6 +6,8 @@ from src.integration.openai_client import (
     LLMConfig,
     build_chat_payload,
     call_llm_with_prompt,
+    call_llm_with_conversation,
+    create_llm_conversation,
     extract_response_text,
     get_default_llm_output_path,
     save_llm_output_text,
@@ -13,28 +15,28 @@ from src.integration.openai_client import (
 
 
 def test_build_chat_payload_basic_shape():
-    """Payload should follow chat-completions structure."""
+    """Payload should follow responses.create structure."""
     config = LLMConfig(endpoint="https://example.com", api_key="k", model="m")
     payload = build_chat_payload("hello", config)
 
     assert payload["model"] == "m"
-    assert payload["messages"][0]["role"] == "system"
-    assert payload["messages"][1]["content"] == "hello"
+    assert payload["instructions"]
+    assert payload["input"] == "hello"
 
 
-def test_extract_response_text_from_choices():
-    """Extractor should read assistant content from first choice."""
+def test_extract_response_text_from_responses_output():
     raw = {
-        "choices": [
+        "id": "resp_1",
+        "output": [
             {
-                "message": {
-                    "role": "assistant",
-                    "content": "public class DemoTest {}",
-                }
+                "type": "message",
+                "content": [
+                    {"type": "output_text", "text": "hello from responses"}
+                ],
             }
-        ]
+        ],
     }
-    assert extract_response_text(raw) == "public class DemoTest {}"
+    assert extract_response_text(raw) == "hello from responses"
 
 
 def test_call_llm_with_prompt_parses_response(monkeypatch):
@@ -44,26 +46,24 @@ def test_call_llm_with_prompt_parses_response(monkeypatch):
     class FakeResponse:
         def model_dump(self):
             return {
-                "choices": [
+                "id": "resp_single",
+                "output": [
                     {
-                        "message": {
-                            "role": "assistant",
-                            "content": "public class DemoTest {}",
-                        }
+                        "type": "message",
+                        "content": [
+                            {"type": "output_text", "text": "public class DemoTest {}"}
+                        ],
                     }
                 ]
             }
 
-    class FakeCompletions:
+    class FakeResponses:
         @staticmethod
         def create(**kwargs):
             return FakeResponse()
 
-    class FakeChat:
-        completions = FakeCompletions()
-
     class FakeClient:
-        chat = FakeChat()
+        responses = FakeResponses()
 
     def fake_create_client(local_config):
         return FakeClient()
@@ -73,6 +73,55 @@ def test_call_llm_with_prompt_parses_response(monkeypatch):
 
     assert result.model == "m"
     assert result.response_text == "public class DemoTest {}"
+
+
+def test_call_llm_with_conversation_reuses_history(monkeypatch):
+    """Conversation call should chain requests with previous_response_id."""
+    config = LLMConfig(endpoint="https://example.com", api_key="k", model="m")
+    conversation = create_llm_conversation(system_prompt="sys")
+    sent_payloads = []
+
+    class FakeResponse:
+        def __init__(self, response_id, content):
+            self.response_id = response_id
+            self.content = content
+
+        def model_dump(self):
+            return {
+                "id": self.response_id,
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {"type": "output_text", "text": self.content}
+                        ],
+                    }
+                ]
+            }
+
+    class FakeResponses:
+        _counter = 0
+
+        @staticmethod
+        def create(**kwargs):
+            FakeResponses._counter += 1
+            sent_payloads.append(kwargs)
+            return FakeResponse(f"resp_{FakeResponses._counter}", "ok")
+
+    class FakeClient:
+        responses = FakeResponses()
+
+    monkeypatch.setattr("src.integration.openai_client._create_openai_client", lambda _config: FakeClient())
+
+    call_llm_with_conversation("hello", config, conversation)
+    call_llm_with_conversation("next", config, conversation)
+
+    assert len(sent_payloads) == 2
+    assert sent_payloads[0]["input"][0]["content"] == "hello"
+    assert "previous_response_id" not in sent_payloads[0]
+    assert sent_payloads[1]["input"][0]["content"] == "next"
+    assert sent_payloads[1]["previous_response_id"] == "resp_1"
+    assert conversation.previous_response_id == "resp_2"
 
 
 def test_default_llm_output_path_and_save(tmp_path):

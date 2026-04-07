@@ -3,11 +3,6 @@
 import os
 
 
-def get_project_root() -> str:
-    # 返回 TestGen 项目根目录。
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-
 def find_java_files(root):
     # 找到给定目录下的所有 Java 文件，递归搜索。
     for dirpath, _, filenames in os.walk(root):
@@ -19,15 +14,6 @@ def find_java_files(root):
 def get_package(tree):
     #从 Java AST 树中提取包名。
     return tree.package.name if tree.package else None
-
-
-def type_name(node):
-    #从 AST 节点获取类型名称。
-    if node is None:
-        return None
-    if hasattr(node, 'name'):
-        return node.name
-    return str(node)
 
 
 def full_class_name(package_name, class_stack, class_decl):

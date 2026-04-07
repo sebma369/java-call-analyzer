@@ -11,6 +11,7 @@ from .integration.openai_client import (
     get_default_llm_output_path,
     save_llm_output_text,
 )
+from .control.iterative_controller import run_iterative_feedback_loop
 from .runners.defects4j_runner import (
     Defects4jRunner,
 )
@@ -54,6 +55,8 @@ def main():
     parser.add_argument('--test-project-root', type=str, help='测试代码写入与执行的项目根目录(默认与--repo相同)')
     parser.add_argument('--defects4j-bin', type=str, default='/usr/src/defects4j/framework/bin/defects4j', help='defects4j 可执行文件路径')
     parser.add_argument('--no-auto-clean', action='store_true', help='关闭自动清理模式（默认开启）')
+    parser.add_argument('--iterative', action='store_true', help='在 llm-generate 模式下启用多轮执行反馈循环')
+    parser.add_argument('--max-rounds', type=int, default=3, help='多轮执行反馈循环的最大轮次（--iterative 启用时生效）')
     args = parser.parse_args()
 
     target_file = os.path.abspath(args.target)
@@ -146,6 +149,33 @@ def main():
         if not os.path.isdir(repo_root):
             raise SystemExit(f'仓库目录不存在：{repo_root}')
         print(f'仓库目录：{repo_root}')
+
+        if args.iterative:
+            if args.max_rounds <= 0:
+                raise SystemExit('--max-rounds 必须为正整数')
+
+            print('\n===== 开始多轮执行反馈循环 =====')
+            llm_config = LLMConfig()
+            result = run_iterative_feedback_loop(
+                repo_root=repo_root,
+                target_file=target_file,
+                max_rounds=args.max_rounds,
+                depth=args.depth,
+                llm_config=llm_config,
+                defects4j_bin=args.defects4j_bin,
+                auto_clean=not args.no_auto_clean,
+            )
+
+            print(f'执行轮次：{result.rounds_executed}')
+            print(f'最终状态：{result.final_status}')
+            print(f'循环输出目录：{result.run_root}')
+            print(f'轮次汇总报告：{result.summary_path}')
+            for item in result.rounds:
+                print(
+                    f"  round {item.round_id}: prompt_type={item.prompt_type}, "
+                    f"status={item.status}, report={item.run_report_path}"
+                )
+            return
 
         result = build_structured_prompt(repo_root, target_file, depth=args.depth)
         print('\n===== 结构化 Prompt 已生成，开始调用 LLM =====')

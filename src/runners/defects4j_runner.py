@@ -21,20 +21,6 @@ class CommandResult:
 
 
 @dataclass
-class GeneratedTestRunResult:
-    # 生成测试的提取和执行流程摘要。
-
-    test_file_path: str
-    package_name: str
-    class_name: str
-    test_methods: list[str]
-    compile_result: CommandResult
-    test_results: list[CommandResult]
-    auto_clean_enabled: bool
-    cleaned_paths: list[str]
-
-
-@dataclass
 class CoverageSummary:
     # 覆盖率摘要，用于特定目标类。
 
@@ -80,6 +66,8 @@ MUTABLE_FILE_PATHS = [
     "defects4j.build.properties",
 ]
 
+DEFECTS4J_RUNS_DIR_NAME = "defects4j_runs"
+
 
 def get_testgen_root() -> str:
     # 返回 TestGen 项目的根目录绝对路径，假设当前文件在 src/runners/ 下。
@@ -87,8 +75,10 @@ def get_testgen_root() -> str:
 
 
 def ensure_temp_root(temp_root: str | None = None) -> str:
-    # 确保临时目录存在，优先使用传入的 temp_root，否则在项目根目录下创建 tmp/。
-    root = temp_root or os.path.join(get_testgen_root(), "tmp")
+    # 确保临时目录存在，优先使用传入的 temp_root 作为基目录。
+    # 所有 defects4j 运行目录统一放在一个总目录下，便于管理和清理。
+    base_root = temp_root or os.path.join(get_testgen_root(), "tmp")
+    root = os.path.join(base_root, DEFECTS4J_RUNS_DIR_NAME)
     os.makedirs(root, exist_ok=True)
     return root
 
@@ -488,77 +478,3 @@ class Defects4jRunner:
         )
 
 
-def apply_and_run_generated_test(
-    llm_output_text: str,
-    target_file: str,
-    project_root: str,
-    defects4j_bin: str,
-    auto_clean: bool = True,
-) -> GeneratedTestRunResult:
-    # 应用生成的测试代码，运行 Defects4J 的覆盖率命令，并返回一个包含执行结果和覆盖率摘要的 GeneratedTestRunResult 对象。
-    java_code = extract_java_code_block(llm_output_text)
-    target_package = infer_package_from_target_file(target_file)
-    java_code = ensure_package_declaration(java_code, target_package)
-
-    artifact_state = snapshot_artifact_state(project_root)
-    file_content_snapshot = snapshot_file_contents(project_root, MUTABLE_FILE_PATHS)
-    test_file_path, package_name, class_name, previous_test_content = write_generated_test_file(project_root, java_code)
-    test_methods = extract_test_method_names(java_code)
-
-    cleaned_paths: list[str] = []
-    try:
-        compile_result = run_command([defects4j_bin, "compile", "-w", project_root], cwd=project_root)
-
-        full_class_name = f"{package_name}.{class_name}" if package_name else class_name
-        test_results: list[CommandResult] = []
-
-        if compile_result.exit_code == 0 and test_methods:
-            for method_name in test_methods:
-                test_cmd = [
-                    defects4j_bin,
-                    "test",
-                    "-w",
-                    project_root,
-                    "-t",
-                    f"{full_class_name}::{method_name}",
-                ]
-                test_results.append(run_command(test_cmd, cwd=project_root))
-    finally:
-        if auto_clean:
-            cleaned_paths = cleanup_generated_run(
-                project_root=project_root,
-                artifact_state=artifact_state,
-                test_file_path=test_file_path,
-                previous_test_content=previous_test_content,
-                file_content_snapshot=file_content_snapshot,
-            )
-
-    return GeneratedTestRunResult(
-        test_file_path=test_file_path,
-        package_name=package_name,
-        class_name=class_name,
-        test_methods=test_methods,
-        compile_result=compile_result,
-        test_results=test_results,
-        auto_clean_enabled=auto_clean,
-        cleaned_paths=cleaned_paths,
-    )
-
-
-def summarize_run_result(run_result: GeneratedTestRunResult) -> dict[str, Any]:
-    # 将 GeneratedTestRunResult 对象转换为一个简化的字典摘要，包含测试文件路径、测试类、测试方法列表、编译结果和测试结果的退出码，以及清理信息。
-    full_class_name = (
-        f"{run_result.package_name}.{run_result.class_name}"
-        if run_result.package_name
-        else run_result.class_name
-    )
-
-    return {
-        "test_file_path": run_result.test_file_path,
-        "test_class": full_class_name,
-        "test_methods": list(run_result.test_methods),
-        "compile_exit_code": run_result.compile_result.exit_code,
-        "test_exit_codes": [res.exit_code for res in run_result.test_results],
-        "auto_clean_enabled": run_result.auto_clean_enabled,
-        "cleaned_paths": list(run_result.cleaned_paths),
-    }
