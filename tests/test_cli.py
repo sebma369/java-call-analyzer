@@ -16,9 +16,12 @@ def test_cli_iterative_mode_dispatches_to_controller(monkeypatch, tmp_path, caps
     class FakeResult:
         rounds_executed = 2
         final_status = "success"
+        requested_mutant_count = 5
+        final_mutant_count = 3
         run_root = str(repo_root / "tmp" / "iterative_runs" / "run_fake")
         summary_path = str(Path(run_root) / "rounds_summary.json")
         rounds = []
+        mutation_generations = []
 
     def fake_run_iterative_feedback_loop(**kwargs):
         called.update(kwargs)

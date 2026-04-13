@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # 在 Defects4J 项目中运行生成的测试代码，收集覆盖率和执行结果，并进行清理。
 
 from dataclasses import dataclass
@@ -48,6 +50,44 @@ class Defects4jRunResult:
     report_json_path: str
     auto_clean_enabled: bool
     cleaned_paths: list[str]
+    mutation_result: MutationResult | None
+
+
+@dataclass
+class MutantInput:
+    # 外部模块提供的变异体输入，包含标识、目标相对路径和变异后源码。
+
+    mutant_id: str
+    target_rel_path: str
+    mutated_source: str
+
+
+@dataclass
+class MutationCaseResult:
+    # 单个变异体评估结果。
+
+    mutant_id: str
+    target_rel_path: str
+    status: str
+    command_result: CommandResult
+    failing_tests_content: str
+    case_report_path: str
+
+
+@dataclass
+class MutationResult:
+    # 变异测试汇总结果。
+
+    executed: bool
+    reason: str
+    total_mutants: int
+    executed_mutants: int
+    killed: int
+    survived: int
+    error_count: int
+    skipped: int
+    mutation_score: float
+    cases: list[MutationCaseResult]
 
 
 ARTIFACT_PATHS = [
@@ -224,6 +264,24 @@ def extract_test_method_names(java_code: str) -> list[str]:
     return methods
 
 
+def extract_executable_test_method_names(java_code: str) -> list[str]:
+    # 提取可执行测试方法名，兼容 JUnit4(@Test) 与 JUnit3(testXxx 命名) 风格。
+    annotated_methods = extract_test_method_names(java_code)
+    junit3_methods = re.findall(
+        r"\bpublic\s+void\s+(test[A-Za-z_][\w]*)\s*\(",
+        java_code,
+        flags=re.MULTILINE,
+    )
+
+    seen: set[str] = set()
+    ordered_methods: list[str] = []
+    for name in annotated_methods + junit3_methods:
+        if name not in seen:
+            seen.add(name)
+            ordered_methods.append(name)
+    return ordered_methods
+
+
 def infer_package_from_target_file(target_file: str) -> str:
     # 从目标 Java 文件中推断包名，通过解析 package 声明，如果没有则返回空字符串。
     with open(target_file, "r", encoding="utf-8", errors="ignore") as file_obj:
@@ -367,6 +425,175 @@ def _save_run_report(run_dir: str, report: dict[str, Any]) -> str:
     return out_path
 
 
+def _save_mutation_case_report(case_dir: str, report: dict[str, Any]) -> str:
+    # 将单个变异体结果保存为 JSON。
+    out_path = os.path.join(case_dir, 'mutation_case_report.json')
+    with open(out_path, 'w', encoding='utf-8') as file_obj:
+        json.dump(report, file_obj, ensure_ascii=False, indent=2)
+    return out_path
+
+
+def _resolve_safe_target_path(project_root: str, target_rel_path: str) -> str:
+    # 将目标相对路径解析为 project_root 内的安全绝对路径。
+    normalized_rel = os.path.normpath(target_rel_path)
+    abs_target = os.path.abspath(os.path.join(project_root, normalized_rel))
+    project_root_abs = os.path.abspath(project_root)
+    common = os.path.commonpath([project_root_abs, abs_target])
+    if common != project_root_abs:
+        raise ValueError(f"目标路径越界: {target_rel_path}")
+    return abs_target
+
+
+def _run_mutation_cases(
+    defects4j_bin: str,
+    project_root: str,
+    run_dir: str,
+    test_class: str,
+    test_method_names: list[str],
+    mutants: list[MutantInput],
+) -> MutationResult:
+    # 在 success 场景下运行逐变异体测试，仅执行当前生成测试类的方法。
+    mutation_root = os.path.join(run_dir, 'mutation_cases')
+    os.makedirs(mutation_root, exist_ok=True)
+
+    cases: list[MutationCaseResult] = []
+    killed = 0
+    survived = 0
+    error_count = 0
+
+    for idx, mutant in enumerate(mutants, start=1):
+        safe_mutant_id = re.sub(r"[^A-Za-z0-9_.-]", "_", mutant.mutant_id)
+        case_dir = os.path.join(mutation_root, f"case_{idx:03d}_{safe_mutant_id}")
+        os.makedirs(case_dir, exist_ok=True)
+
+        command_result = CommandResult(command=[], exit_code=1, stdout='', stderr='mutation command not executed')
+        failing_tests_content = ''
+        status = 'error'
+        case_report_path = ''
+
+        try:
+            target_file_path = _resolve_safe_target_path(project_root, mutant.target_rel_path)
+            if not os.path.isfile(target_file_path):
+                raise FileNotFoundError(f"目标源码文件不存在: {mutant.target_rel_path}")
+
+            with open(target_file_path, 'r', encoding='utf-8', errors='ignore') as file_obj:
+                original_source = file_obj.read()
+
+            try:
+                with open(target_file_path, 'w', encoding='utf-8') as file_obj:
+                    file_obj.write(mutant.mutated_source.rstrip() + '\n')
+
+                # 避免上一个变异体残留 failing_tests 干扰当前判定。
+                remove_path(os.path.join(project_root, 'failing_tests'))
+
+                compile_cmd = [
+                    defects4j_bin,
+                    'compile',
+                    '-w',
+                    project_root,
+                ]
+                compile_result = run_command(compile_cmd, cwd=project_root)
+                if compile_result.exit_code != 0:
+                    command_result = compile_result
+                    status = 'error'
+                    error_count += 1
+                    continue
+
+                for method_name in test_method_names:
+                    remove_path(os.path.join(project_root, 'failing_tests'))
+                    mutation_cmd = [
+                        defects4j_bin,
+                        'test',
+                        '-w',
+                        project_root,
+                        '-t',
+                        f'{test_class}::{method_name}',
+                    ]
+                    command_result = run_command(mutation_cmd, cwd=project_root)
+                    failing_tests_content = _read_failing_tests(project_root)
+
+                    if failing_tests_content or command_result.exit_code != 0:
+                        status = 'killed'
+                        killed += 1
+                        break
+
+                if status != 'killed':
+                    if command_result.exit_code == 0:
+                        status = 'survived'
+                        survived += 1
+                    else:
+                        status = 'error'
+                        error_count += 1
+            finally:
+                with open(target_file_path, 'w', encoding='utf-8') as file_obj:
+                    file_obj.write(original_source)
+
+        except Exception as ex:  # noqa: BLE001
+            status = 'error'
+            error_count += 1
+            command_result = CommandResult(
+                command=command_result.command,
+                exit_code=command_result.exit_code,
+                stdout=command_result.stdout,
+                stderr=(command_result.stderr + f"\nmutation setup failed: {ex}").strip(),
+            )
+
+        case_report = {
+            'mutant_id': mutant.mutant_id,
+            'target_rel_path': mutant.target_rel_path,
+            'status': status,
+            'exit_code': command_result.exit_code,
+            'failing_tests': failing_tests_content,
+            'stdout': command_result.stdout,
+            'stderr': command_result.stderr,
+        }
+        case_report_path = _save_mutation_case_report(case_dir, case_report)
+        cases.append(
+            MutationCaseResult(
+                mutant_id=mutant.mutant_id,
+                target_rel_path=mutant.target_rel_path,
+                status=status,
+                command_result=command_result,
+                failing_tests_content=failing_tests_content,
+                case_report_path=case_report_path,
+            )
+        )
+
+    executed_mutants = len(cases)
+    total_mutants = len(mutants)
+    skipped = max(total_mutants - executed_mutants, 0)
+    mutation_score = round((killed / executed_mutants) * 100.0, 1) if executed_mutants > 0 else 0.0
+
+    return MutationResult(
+        executed=True,
+        reason='',
+        total_mutants=total_mutants,
+        executed_mutants=executed_mutants,
+        killed=killed,
+        survived=survived,
+        error_count=error_count,
+        skipped=skipped,
+        mutation_score=mutation_score,
+        cases=cases,
+    )
+
+
+def _build_skipped_mutation_result(reason: str, total_mutants: int) -> MutationResult:
+    # 构造未执行变异评估时的统一结果结构。
+    return MutationResult(
+        executed=False,
+        reason=reason,
+        total_mutants=total_mutants,
+        executed_mutants=0,
+        killed=0,
+        survived=0,
+        error_count=0,
+        skipped=total_mutants,
+        mutation_score=0.0,
+        cases=[],
+    )
+
+
 class Defects4jRunner:
     # Defects4J 运行器，负责将 LLM 输出的测试代码写入项目、运行覆盖率命令、解析结果并进行清理。
 
@@ -375,13 +602,20 @@ class Defects4jRunner:
         self.auto_clean = auto_clean
         self.temp_root = temp_root
 
-    def run(self, llm_output_text: str, target_file: str, project_root: str) -> Defects4jRunResult:
+    def run(
+        self,
+        llm_output_text: str,
+        target_file: str,
+        project_root: str,
+        mutants: list[MutantInput] | None = None,
+    ) -> Defects4jRunResult:
         """Write generated test, run Defects4J coverage, parse report, and cleanup."""
         run_dir = create_run_temp_dir(self.temp_root)
 
         java_code = extract_java_code_block(llm_output_text)
         target_package = infer_package_from_target_file(target_file)
         java_code = ensure_package_declaration(java_code, target_package)
+        test_method_names = extract_executable_test_method_names(java_code)
 
         artifact_state = snapshot_artifact_state(project_root)
         file_content_snapshot = snapshot_file_contents(project_root, MUTABLE_FILE_PATHS)
@@ -397,6 +631,8 @@ class Defects4jRunner:
         coverage_result = CommandResult(command=[], exit_code=1, stdout='', stderr='coverage command not executed')
         coverage_summary: CoverageSummary | None = None
         failing_tests_content = ''
+        mutation_result: MutationResult | None = None
+        status = 'coverage_command_failed'
 
         try:
             suite_archive = _write_suite_archive_for_generated_test(run_dir, package_name, class_name, java_code)
@@ -418,6 +654,47 @@ class Defects4jRunner:
                 shutil.copy2(coverage_xml_path, os.path.join(run_dir, 'coverage.xml'))
 
             coverage_summary = parse_coverage_summary(coverage_xml_path, target_class_fqn)
+
+            if coverage_result.exit_code != 0:
+                status = 'coverage_command_failed'
+            elif failing_tests_content:
+                status = 'test_execution_failed'
+            elif coverage_summary is None:
+                status = 'coverage_report_missing'
+            else:
+                status = 'success'
+
+            normalized_mutants = mutants or []
+            if status != 'success':
+                mutation_result = _build_skipped_mutation_result(
+                    reason='status_not_success',
+                    total_mutants=len(normalized_mutants),
+                )
+            elif not normalized_mutants:
+                mutation_result = _build_skipped_mutation_result(
+                    reason='no_mutants_provided',
+                    total_mutants=0,
+                )
+            elif not test_method_names:
+                mutation_result = _build_skipped_mutation_result(
+                    reason='no_test_methods_detected',
+                    total_mutants=len(normalized_mutants),
+                )
+            else:
+                target_paths = sorted({item.target_rel_path for item in normalized_mutants})
+                source_snapshot = snapshot_file_contents(project_root, target_paths)
+                try:
+                    mutation_result = _run_mutation_cases(
+                        defects4j_bin=self.defects4j_bin,
+                        project_root=project_root,
+                        run_dir=run_dir,
+                        test_class=test_class,
+                        test_method_names=test_method_names,
+                        mutants=normalized_mutants,
+                    )
+                finally:
+                    # 在批量变异评估结束后再次整体恢复，确保源码完全回到运行前状态。
+                    restore_file_contents(project_root, source_snapshot)
         finally:
             if self.auto_clean:
                 cleaned_paths = cleanup_generated_run(
@@ -427,14 +704,6 @@ class Defects4jRunner:
                     previous_test_content=previous_test_content,
                     file_content_snapshot=file_content_snapshot,
                 )
-
-        status = 'success'
-        if coverage_result.exit_code != 0:
-            status = 'coverage_command_failed'
-        elif failing_tests_content:
-            status = 'test_execution_failed'
-        elif coverage_summary is None:
-            status = 'coverage_report_missing'
 
         report = {
             'status': status,
@@ -461,6 +730,31 @@ class Defects4jRunner:
             'cleaned_paths': cleaned_paths,
             'stdout': coverage_result.stdout,
             'stderr': coverage_result.stderr,
+            'mutation': (
+                {
+                    'executed': mutation_result.executed,
+                    'reason': mutation_result.reason,
+                    'total_mutants': mutation_result.total_mutants,
+                    'executed_mutants': mutation_result.executed_mutants,
+                    'killed': mutation_result.killed,
+                    'survived': mutation_result.survived,
+                    'error_count': mutation_result.error_count,
+                    'skipped': mutation_result.skipped,
+                    'mutation_score': mutation_result.mutation_score,
+                    'cases': [
+                        {
+                            'mutant_id': item.mutant_id,
+                            'target_rel_path': item.target_rel_path,
+                            'status': item.status,
+                            'exit_code': item.command_result.exit_code,
+                            'case_report_path': item.case_report_path,
+                        }
+                        for item in mutation_result.cases
+                    ],
+                }
+                if mutation_result
+                else None
+            ),
         }
         report_json_path = _save_run_report(run_dir, report)
 
@@ -475,6 +769,7 @@ class Defects4jRunner:
             report_json_path=report_json_path,
             auto_clean_enabled=self.auto_clean,
             cleaned_paths=cleaned_paths,
+            mutation_result=mutation_result,
         )
 
 

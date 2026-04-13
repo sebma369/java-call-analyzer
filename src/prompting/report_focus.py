@@ -58,6 +58,8 @@ def extract_coverage_focus(report: dict[str, Any]) -> dict[str, Any]:
     """Extract concise coverage summary from Defects4J report."""
     summary = report.get("coverage_summary") or {}
     uncovered_lines = summary.get("uncovered_lines", [])
+    mutation = report.get("mutation") or {}
+    mutation_cases = mutation.get("cases", []) if isinstance(mutation, dict) else []
 
     return {
         "status": report.get("status", "unknown"),
@@ -69,4 +71,53 @@ def extract_coverage_focus(report: dict[str, Any]) -> dict[str, Any]:
         "total_conditions": summary.get("total_conditions"),
         "uncovered_lines": uncovered_lines,
         "uncovered_lines_preview": uncovered_lines[:40],
+        "mutation_executed": mutation.get("executed"),
+        "mutation_reason": mutation.get("reason"),
+        "mutation_total_mutants": mutation.get("total_mutants"),
+        "mutation_executed_mutants": mutation.get("executed_mutants"),
+        "mutation_killed": mutation.get("killed"),
+        "mutation_survived": mutation.get("survived"),
+        "mutation_error_count": mutation.get("error_count"),
+        "mutation_skipped": mutation.get("skipped"),
+        "mutation_score": mutation.get("mutation_score"),
+        "mutation_cases": [
+            {
+                "mutant_id": case.get("mutant_id"),
+                "target_rel_path": case.get("target_rel_path"),
+                "status": case.get("status"),
+                "exit_code": case.get("exit_code"),
+            }
+            for case in mutation_cases
+            if isinstance(case, dict)
+        ],
+    }
+
+
+def extract_mutation_focus(report: dict[str, Any]) -> dict[str, Any]:
+    """Extract concise mutation summary from Defects4J report."""
+    mutation = report.get("mutation") or {}
+    mutation_cases = mutation.get("cases", []) if isinstance(mutation, dict) else []
+
+    surviving_cases = [
+        {
+            "mutant_id": case.get("mutant_id"),
+            "target_rel_path": case.get("target_rel_path"),
+            "status": case.get("status"),
+        }
+        for case in mutation_cases
+        if isinstance(case, dict) and case.get("status") == "survived"
+    ]
+
+    return {
+        "status": report.get("status", "unknown"),
+        "executed": mutation.get("executed"),
+        "reason": mutation.get("reason"),
+        "total_mutants": mutation.get("total_mutants"),
+        "executed_mutants": mutation.get("executed_mutants"),
+        "killed": mutation.get("killed"),
+        "survived": mutation.get("survived"),
+        "error_count": mutation.get("error_count"),
+        "skipped": mutation.get("skipped"),
+        "mutation_score": mutation.get("mutation_score"),
+        "surviving_cases_preview": surviving_cases[:10],
     }

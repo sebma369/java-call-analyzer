@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .reward_context import append_reward_score_section, get_latest_reward_context
 from .report_focus import extract_compile_error_focus, load_defects4j_run_report
 
 
@@ -31,6 +32,8 @@ def build_compile_error_prompt(
     else:
         lines.append("- (no compile error lines captured)")
     lines.append("")
+    append_reward_score_section(lines, get_latest_reward_context(prompt_result))
     lines.append("=== Instruction ===")
+    lines.append("请优先提升 Reward Score，避免导致编译/运行能力倒退。")
     lines.append("请输出可编译的完整 Java 测试类代码，仅输出代码，不要解释。")
     return "\n".join(lines)

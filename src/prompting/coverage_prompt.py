@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .reward_context import append_reward_score_section, get_latest_reward_context
 from .report_focus import extract_coverage_focus, load_defects4j_run_report
 
 
@@ -37,6 +38,18 @@ def build_coverage_improve_prompt(
     else:
         lines.append("- (none)")
     lines.append("")
+
+    lines.append("=== Mutation Focus ===")
+    lines.append(f"mutation_score: {focus['mutation_score']}")
+    lines.append(f"killed: {focus['mutation_killed']}")
+    lines.append(f"survived: {focus['mutation_survived']}")
+    lines.append(f"executed_mutants: {focus['mutation_executed_mutants']}/{focus['mutation_total_mutants']}")
+    lines.append(f"mutation_feedback: {'available' if focus['mutation_executed'] else focus['mutation_reason']}")
+    lines.append("")
+
+    append_reward_score_section(lines, get_latest_reward_context(prompt_result))
+
     lines.append("=== Instruction ===")
-    lines.append("请输出完整 Java 测试类代码，优先覆盖未覆盖行与分支，仅输出代码，不要解释。")
+    lines.append("请优先提升 Reward Score，避免覆盖率或变异分数倒退。")
+    lines.append("请输出完整 Java 测试类代码，优先覆盖未覆盖行与分支，并尽量提高对变异体的杀死率，仅输出代码，不要解释。")
     return "\n".join(lines)

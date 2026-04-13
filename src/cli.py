@@ -1,5 +1,6 @@
 
 import argparse
+import json
 import os
 
 from .analysis.java_parser import collect_methods_and_calls, collect_target_methods
@@ -14,6 +15,7 @@ from .integration.openai_client import (
 from .control.iterative_controller import run_iterative_feedback_loop
 from .runners.defects4j_runner import (
     Defects4jRunner,
+    MutantInput,
 )
 from .prompting.structured_prompt import (
     build_structured_prompt,
@@ -57,9 +59,48 @@ def main():
     parser.add_argument('--no-auto-clean', action='store_true', help='关闭自动清理模式（默认开启）')
     parser.add_argument('--iterative', action='store_true', help='在 llm-generate 模式下启用多轮执行反馈循环')
     parser.add_argument('--max-rounds', type=int, default=3, help='多轮执行反馈循环的最大轮次（--iterative 启用时生效）')
+    parser.add_argument('--mutant-count', type=int, default=5, help='每轮变异生成对话要求生成的变异体数量')
+    parser.add_argument('--mutants-json', type=str, help='可选：变异体输入JSON文件路径（仅 llm-generate 模式使用）')
     args = parser.parse_args()
 
+    def load_mutants_from_json(json_path: str) -> list[MutantInput]:
+        with open(json_path, 'r', encoding='utf-8') as file_obj:
+            payload = json.load(file_obj)
+
+        raw_items = payload.get('mutants') if isinstance(payload, dict) else payload
+        if not isinstance(raw_items, list):
+            raise SystemExit('mutants-json 内容必须是数组，或包含 mutants 数组字段')
+
+        mutants: list[MutantInput] = []
+        for idx, item in enumerate(raw_items, start=1):
+            if not isinstance(item, dict):
+                raise SystemExit(f'mutants-json 第 {idx} 项必须是对象')
+
+            mutant_id = str(item.get('mutant_id', f'mutant_{idx}')).strip()
+            target_rel_path = str(item.get('target_rel_path', '')).strip()
+            mutated_source = item.get('mutated_source')
+
+            if not target_rel_path:
+                raise SystemExit(f'mutants-json 第 {idx} 项缺少 target_rel_path')
+            if not isinstance(mutated_source, str) or not mutated_source.strip():
+                raise SystemExit(f'mutants-json 第 {idx} 项缺少 mutated_source')
+
+            mutants.append(
+                MutantInput(
+                    mutant_id=mutant_id,
+                    target_rel_path=target_rel_path,
+                    mutated_source=mutated_source,
+                )
+            )
+        return mutants
+
     target_file = os.path.abspath(args.target)
+    mutants: list[MutantInput] | None = None
+    if args.mutants_json:
+        mutants_json = os.path.abspath(args.mutants_json)
+        if not os.path.isfile(mutants_json):
+            raise SystemExit(f'变异体 JSON 文件不存在：{mutants_json}')
+        mutants = load_mutants_from_json(mutants_json)
 
     if not os.path.isfile(target_file):
         raise SystemExit(f'目标 Java 文件不存在：{target_file}')
@@ -164,10 +205,13 @@ def main():
                 llm_config=llm_config,
                 defects4j_bin=args.defects4j_bin,
                 auto_clean=not args.no_auto_clean,
+                mutants=mutants,
+                mutant_count=args.mutant_count,
             )
 
             print(f'执行轮次：{result.rounds_executed}')
             print(f'最终状态：{result.final_status}')
+            print(f'变异体数量：{result.final_mutant_count}/{result.requested_mutant_count}')
             print(f'循环输出目录：{result.run_root}')
             print(f'轮次汇总报告：{result.summary_path}')
             for item in result.rounds:
@@ -175,6 +219,7 @@ def main():
                     f"  round {item.round_id}: prompt_type={item.prompt_type}, "
                     f"status={item.status}, report={item.run_report_path}"
                 )
+            print(f'变异生成轮次：{len(result.mutation_generations)}')
             return
 
         result = build_structured_prompt(repo_root, target_file, depth=args.depth)
@@ -212,6 +257,7 @@ def main():
                 llm_output_text=llm_result.response_text,
                 target_file=target_file,
                 project_root=test_project_root,
+                mutants=mutants,
             )
 
             print(f"测试文件：{run_result.test_file_path}")
@@ -235,6 +281,19 @@ def main():
 
             if run_result.auto_clean_enabled:
                 print(f"已清理路径数量：{len(run_result.cleaned_paths)}")
+
+            if run_result.mutation_result is not None:
+                mutation = run_result.mutation_result
+                print('变异测试摘要：')
+                print(f"  是否执行：{'是' if mutation.executed else '否'}")
+                if not mutation.executed:
+                    print(f'  跳过原因：{mutation.reason}')
+                print(f'  总变异体：{mutation.total_mutants}')
+                print(f'  已执行：{mutation.executed_mutants}')
+                print(f'  killed：{mutation.killed}')
+                print(f'  survived：{mutation.survived}')
+                print(f'  error：{mutation.error_count}')
+                print(f'  score：{mutation.mutation_score}%')
 
 
 if __name__ == '__main__':
